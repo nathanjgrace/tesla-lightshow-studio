@@ -19,3 +19,8 @@ Web app for creating Tesla light shows (`.fseq` + audio on a USB drive). Plan: `
 
 - `npm test`, `npm run typecheck`, `npm run build` must pass before committing.
 - `npm run fixtures` once per fresh checkout so the real-file tests run.
+
+## Checking the UI
+
+- Dev builds expose `window.__playback` (seek/play) and `window.__scene` (3D scene) for automated browser checks; production builds don't.
+- `VITE_LIBRARY_BASE` points the show library at another URL (e.g. a local copy of Tesla's `examples/` folder) when GitHub isn't reachable.

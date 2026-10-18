@@ -26,7 +26,7 @@ Tesla defines a single 200-channel layout; each car plays what it has and ignore
 │  UI (React)                                                             │
 │   ├─ Setup wizard: song → vehicle (VIN / questions) → style             │
 │   ├─ Timeline editor (canvas): tracks, effects, waveform, beat grid     │
-│   ├─ Car preview (SVG, later three.js)                                  │
+│   ├─ Car preview (three.js, stylized Model X)                ✅ first   │
 │   └─ Problems panel (validator output, click to jump)                   │
 │                                                                         │
 │  Core (pure TypeScript, no UI; runs in tests and Web Workers)           │
@@ -34,10 +34,10 @@ Tesla defines a single 200-channel layout; each car plays what it has and ignore
 │   ├─ encoding      byte values for light & closure commands   ✅ done   │
 │   ├─ fseq          FSEQ v2 read/write, byte-exact             ✅ done   │
 │   ├─ validate      header + closure rules                     ✅ done   │
-│   ├─ vehicles      capability profiles (Model X first)                  │
+│   ├─ vehicles      capability profiles (Model X first)       ✅ first   │
 │   ├─ project       document model: tracks, effects, undo                │
 │   ├─ compile       project → frames (incl. ch 4–6 ramp leader rules)    │
-│   ├─ simulate      frames + profile → what the car will actually show   │
+│   ├─ simulate      frames + profile → what the car will show ✅ done    │
 │   ├─ analysis      audio → beats, sections, energy, melody (Worker)     │
 │   ├─ choreograph   analysis + profile + style → effects                 │
 │   └─ export        .fseq + 44.1 kHz WAV → LightShow.zip                 │
@@ -140,8 +140,8 @@ audio ──▶ analysis (Worker) ──▶ choreograph(style, profile) ──�
 | Milestone | Contents | Status |
 |---|---|---|
 | **M0 Foundation** | Project setup, FSEQ read/write, validator, file-check page | ✅ done |
-| **M1 Playback** | Load song + `.fseq`, waveform, 2D Model X preview synced to audio | next |
-| **M2 Editor basics** | Project model, compile, timeline, place/move effects, export zip | |
+| **M1 Playback** | Editor layout (side-by-side / stacked), 3D Model X with working closures, composer timeline with waveform, Tesla example library, audio-synced playback | ✅ first pass |
+| **M2 Editor basics** | Project model, compile, timeline, place/move effects, export zip | next |
 | **M3 Auto-generate v1** | essentia.js analysis, beat-driven lights, style presets, closure planner | |
 | **M4 Vehicle profiles** | Model X variants, VIN decode, questionnaire, simulate OR/kind quirks | |
 | **M5 Expert parity** | Layers, value curves, timing tracks, `.xsq` import, shortcuts | |
@@ -157,10 +157,22 @@ audio ──▶ analysis (Worker) ──▶ choreograph(style, profile) ──�
 | Build/dev server | Vite | Fast, simple |
 | Tests | Vitest | Same config as Vite |
 | Timeline rendering | HTML canvas | Thousands of cells at 50 frames per second |
+| 3D preview | three.js (MIT) with bloom post-processing | Standard WebGL library; rotate/zoom via OrbitControls |
+| Zip reading | fflate (MIT) | Small, fast; Tesla ships some examples as zips |
 | Audio analysis | essentia.js (AGPL-3.0) | Best in-browser feature set; license matches ours |
 | Storage | IndexedDB | Large audio files, works offline |
 | Hosting | Static hosting (GitHub Pages or Cloudflare Pages) | Free, no server for v1 |
 | License | AGPL-3.0-only | Owner chose open source; required by essentia.js |
+
+## 10a. Show library
+
+Tesla's official example shows are loaded straight from Tesla's GitHub repo at runtime, pinned to commit `9f94951` (`src/library/catalog.ts`). Tesla publishes them without a license, so we link instead of re-hosting copies; GitHub serves them with CORS enabled, so browsers can fetch them directly. Tesla's single-car zips for *Ready for Assault* and *Cyber Symphony* contain only xLights project files and no `.fseq`, so the library uses the per-car files from the multi-car versions.
+
+Community shows (xlightshows.io, teslalightshare.io) are a later addition. They need permission from those sites or their authors before we pull them in.
+
+## 10b. 3D model
+
+Tesla publishes 3D models only for the Model S and Cybertruck (in its xLights project). The Model X in the app is built in code (`src/app/car/ModelXScene.ts`): stylized, with every light channel placed per Tesla's diagram, and working falcon wings, front doors, liftgate, mirrors, windows and charge port. A detailed licensed model can replace the body later; light and closure wiring stays the same.
 
 ## 11. Risks
 

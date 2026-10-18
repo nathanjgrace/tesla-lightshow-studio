@@ -4,7 +4,7 @@ A web app for creating custom Tesla light shows: one click to auto-generate a sh
 
 > **Try it:** <https://nathanjgrace.github.io/tesla-lightshow-studio/>
 >
-> **Status:** early development. Right now the app can open a `.fseq` light show file and check it for problems. See [docs/DESIGN.md](docs/DESIGN.md) for the plan.
+> **Status:** early development. The app opens in an editor with a 3D Model X and a timeline composer, and can play Tesla's official example shows or your own `.fseq` files in sync with their music. Creating and editing shows comes next. See [docs/DESIGN.md](docs/DESIGN.md) for the plan.
 
 ## Running it on your own computer
 
@@ -39,8 +39,10 @@ You only need to do steps 1–3 once.
 ## Project layout
 
 ```
-src/core/   The engine: channel map, file format, validator. No UI; fully tested.
-src/app/    The web page (React).
+src/core/      The engine: channel map, file format, validator, vehicle profiles,
+               light/closure simulation. No UI; fully tested.
+src/library/   Catalog of Tesla's example shows, loaded from Tesla's GitHub repo.
+src/app/       The editor UI (React): 3D car (three.js), composer timeline, playback.
 docs/       Design doc and research notes.
 scripts/    Helper scripts.
 ```
