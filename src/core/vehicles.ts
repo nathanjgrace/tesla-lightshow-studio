@@ -41,8 +41,24 @@ export interface OrGroup {
   outputs: string[];
 }
 
+/**
+ * What the 3D preview should draw: the model's body, plus the lighting
+ * hardware that differs between versions and trims.
+ */
+export interface BodyStyle {
+  model: ModelId;
+  /** Refreshed design (2024+ Model 3, 2025+ Model Y): slimmer headlights. */
+  refresh?: boolean;
+  /** Full-width light bars (2025+ Model Y Premium; Cybertruck). */
+  frontLightBar?: boolean;
+  rearLightBar?: boolean;
+  /** Front fog lamps in the bumper. */
+  fogLamps?: boolean;
+}
+
 export interface VehicleProfile {
   id: string;
+  body: BodyStyle;
   model: ModelId;
   /** The variant, e.g. "2021 – present". */
   variant: string;
@@ -60,6 +76,7 @@ export interface VehicleProfile {
 type Row = [id: string, group: ChannelGroup, extra?: Partial<Omit<ProfileChannel, 'id' | 'group'>>];
 
 function profile(p: Omit<VehicleProfile, 'channels' | 'name'> & { rows: Row[] }): VehicleProfile {
+  if (p.body.model !== p.model) throw new Error(`${p.id}: body is for ${p.body.model}`);
   const { rows, ...rest } = p;
   return {
     ...rest,
@@ -127,6 +144,7 @@ const commonClosures = (liftgate?: string): Row[] => [
 export const MODEL_S_2021 = profile({
   id: 'modelS-2021',
   model: 'modelS',
+  body: { model: 'modelS', fogLamps: true },
   variant: '2021 – present',
   hint: 'Refreshed interior with a horizontal center screen',
   years: { from: 2021 },
@@ -151,6 +169,7 @@ export const MODEL_S_2021 = profile({
 export const MODEL_X_2021 = profile({
   id: 'modelX-2021',
   model: 'modelX',
+  body: { model: 'modelX', fogLamps: true },
   variant: '2021 – 2024',
   hint: 'White-only interior lighting',
   years: { from: 2021, to: 2024 },
@@ -170,6 +189,7 @@ export const MODEL_X_2021 = profile({
 export const MODEL_X_2025 = profile({
   id: 'modelX-2025',
   model: 'modelX',
+  body: { model: 'modelX', fogLamps: true },
   variant: '2025 – present',
   years: { from: 2025 },
   channel4LeadsRamps: true,
@@ -217,10 +237,12 @@ const threeYOrGroups = (tailsDriveLicensePlate: boolean): OrGroup[] => [
 ];
 
 const SR_PLUS = 'Not on Standard Range Plus';
+const FOGS_2024 = 'Reportedly not fitted on 2024+ Model 3 (unverified)';
 
 export const MODEL_3_2017 = profile({
   id: 'model3-2017',
   model: 'model3',
+  body: { model: 'model3', fogLamps: true },
   variant: '2017 – Oct 2020',
   years: { from: 2017, to: 2020 },
   channel4LeadsRamps: true,
@@ -239,6 +261,7 @@ export const MODEL_3_2017 = profile({
 export const MODEL_3_2020 = profile({
   id: 'model3-2020',
   model: 'model3',
+  body: { model: 'model3', fogLamps: true },
   variant: 'Oct 2020 – 2023',
   hint: 'Built October 2020 or later',
   years: { from: 2020, to: 2023 },
@@ -250,13 +273,14 @@ export const MODEL_3_2020 = profile({
 export const MODEL_3_2024 = profile({
   id: 'model3-2024',
   model: 'model3',
-  variant: '2024 – present',
-  hint: 'Refreshed design (sold from 2024)',
+  body: { model: 'model3', refresh: true },
+  variant: '2024 – present · Premium / Performance',
+  hint: 'Refreshed design with colored interior light strips',
   years: { from: 2024 },
   channel4LeadsRamps: true,
   orGroups: threeYOrGroups(false),
   rows: [
-    ...threeYFront('Unverified on 2024+ Model 3'),
+    ...threeYFront(FOGS_2024),
     ...commonRear(NON_NA),
     ...commonClosures('Only with a power trunk'),
     ...centerDisplay(),
@@ -264,9 +288,22 @@ export const MODEL_3_2024 = profile({
   ],
 });
 
+export const MODEL_3_STANDARD = profile({
+  id: 'model3-2026-standard',
+  model: 'model3',
+  body: { model: 'model3', refresh: true },
+  variant: '2026 – present · Standard',
+  hint: 'Standard trim: no colored interior light strips',
+  years: { from: 2026 },
+  channel4LeadsRamps: true,
+  orGroups: threeYOrGroups(false),
+  rows: [...threeYFront(FOGS_2024), ...commonRear(NON_NA), ...commonClosures('Only with a power trunk'), ...centerDisplay()],
+});
+
 export const MODEL_Y_2020 = profile({
   id: 'modelY-2020',
   model: 'modelY',
+  body: { model: 'modelY', fogLamps: true },
   variant: '2020 – 2024',
   years: { from: 2020, to: 2025 },
   channel4LeadsRamps: true,
@@ -275,22 +312,49 @@ export const MODEL_Y_2020 = profile({
   rows: [...threeYFront(undefined), ...commonRear(NON_NA), ...commonClosures('Only with a power liftgate'), ...centerDisplay()],
 });
 
+// The 2025+ Model Y came out after Tesla's last light show documentation
+// update, so which channels drive its light bars is unknown. The preview
+// assumes the front bar follows the signature lights and the rear bar the tail
+// lights, the closest match on earlier cars.
+const Y_2025 = 'Unverified on 2025+ Model Y';
+
+const y2025Front = (lightBar: boolean): Row[] =>
+  threeYFront(undefined).map(([id, group, extra]): Row => {
+    const bar = lightBar && /Signature$/.test(id);
+    return [id, group, { maybe: bar ? 'Assumed to drive the front light bar (unverified)' : Y_2025, ...extra }];
+  });
+
 export const MODEL_Y_2025 = profile({
   id: 'modelY-2025',
   model: 'modelY',
-  variant: '2025 – present',
-  hint: 'Light bar across the front',
+  body: { model: 'modelY', refresh: true, frontLightBar: true, rearLightBar: true },
+  variant: '2025 – present · Premium / Performance',
+  hint: 'Light bars across the front and back',
   years: { from: 2025 },
   channel4LeadsRamps: true,
   orGroups: threeYOrGroups(false),
   rows: [
-    // Released after Tesla's last light show documentation update.
-    ...threeYFront(undefined).map(([id, group, extra]): Row => [id, group, { maybe: 'Unverified on 2025+ Model Y', ...extra }]),
-    ...commonRear(NON_NA),
+    ...y2025Front(true),
+    ...commonRear(NON_NA).map(([id, group, extra]): Row =>
+      /Tail$/.test(id) ? [id, group, { ...extra, maybe: 'Assumed to drive the rear light bar (unverified)' }] : [id, group, extra],
+    ),
     ...commonClosures('Only with a power liftgate'),
     ...centerDisplay(),
     ...accentLights,
   ],
+});
+
+export const MODEL_Y_STANDARD = profile({
+  id: 'modelY-2026-standard',
+  model: 'modelY',
+  // Reports conflict on whether the rear light strip lights up on Standard.
+  body: { model: 'modelY', refresh: true },
+  variant: '2026 – present · Standard',
+  hint: 'Standard trim: no front light bar, single-piece headlights',
+  years: { from: 2026 },
+  channel4LeadsRamps: true,
+  orGroups: threeYOrGroups(false),
+  rows: [...y2025Front(false), ...commonRear(NON_NA), ...commonClosures('Only with a power liftgate'), ...centerDisplay()],
 });
 
 // --- Cybertruck ------------------------------------------------------------------
@@ -307,6 +371,7 @@ const lightBar = (base: string, count: number, label: string, maybe?: string): R
 export const CYBERTRUCK_2024 = profile({
   id: 'cybertruck-2024',
   model: 'cybertruck',
+  body: { model: 'cybertruck', frontLightBar: true, rearLightBar: true },
   variant: '2024 – present',
   hint: 'Cybertruck',
   years: { from: 2024 },
@@ -346,10 +411,12 @@ export const VEHICLES: readonly VehicleProfile[] = [
   MODEL_3_2017,
   MODEL_3_2020,
   MODEL_3_2024,
+  MODEL_3_STANDARD,
   MODEL_X_2021,
   MODEL_X_2025,
   MODEL_Y_2020,
   MODEL_Y_2025,
+  MODEL_Y_STANDARD,
   CYBERTRUCK_2024,
 ];
 

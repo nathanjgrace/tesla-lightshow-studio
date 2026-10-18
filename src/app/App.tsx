@@ -9,11 +9,12 @@ import { audioType, fromZip, loadLibraryShow, type LoadedFiles } from '../librar
 import { computePeaks, type Peaks } from './audio';
 import { CarView } from './CarView';
 import { Composer, type Range } from './Composer';
-import { CarPositionHelp, ExportDialog, UsbHelpDialog, VinDialog } from './dialogs';
+import { ExportDialog, UsbHelpDialog, VinDialog } from './dialogs';
 import { exportFseq, exportUsbZip } from './exportShow';
 import { Playback } from './playback';
 
 type Layout = 'side' | 'stack';
+type CarMode = 'single' | 'multi';
 type Modal = 'vin' | 'export' | 'help' | undefined;
 
 interface Loaded {
@@ -39,11 +40,9 @@ function store(key: string, value: string): void {
   }
 }
 
-function initialSelection(): { showId: string; car: number } {
-  const params = new URLSearchParams(location.search);
-  const show = LIBRARY.find((s) => s.id === params.get('show')) ?? LIBRARY.find((s) => s.id === DEFAULT_SHOW_ID)!;
-  const car = Math.min(show.cars, Math.max(1, Number(params.get('car')) || 1));
-  return { showId: show.id, car };
+function initialShowId(): string {
+  const id = new URLSearchParams(location.search).get('show');
+  return LIBRARY.find((s) => s.id === id)?.id ?? DEFAULT_SHOW_ID;
 }
 
 const VIN_OPTION = '__vin';
@@ -68,7 +67,8 @@ export function App() {
   const [vehicle, setVehicle] = useState<VehicleProfile>(
     () => VEHICLES_BY_ID.get(stored('vehicle') ?? '') ?? VEHICLES_BY_ID.get(DEFAULT_VEHICLE_ID)!,
   );
-  const [selection, setSelection] = useState(initialSelection);
+  const [showId, setShowId] = useState(initialShowId);
+  const [carMode, setCarMode] = useState<CarMode>('single');
   const [fileName, setFileName] = useState<string>();
   const [loaded, setLoaded] = useState<Loaded>();
   const [range, setRange] = useState<Range>({ startMs: 0, endMs: 0 });
@@ -79,7 +79,7 @@ export function App() {
   const [modal, setModal] = useState<Modal>();
   const loadToken = useRef(0);
 
-  const libraryShow: LibraryShow | undefined = fileName ? undefined : LIBRARY.find((s) => s.id === selection.showId);
+  const libraryShow: LibraryShow | undefined = fileName ? undefined : LIBRARY.find((s) => s.id === showId);
   // Re-simulated when the vehicle changes; the show itself stays loaded.
   const sim = useMemo(() => (loaded ? simulate(loaded.show, vehicle) : undefined), [loaded, vehicle]);
   const durationMs = loaded ? loaded.show.frameCount * loaded.show.stepTimeMs : 0;
@@ -107,23 +107,23 @@ export function App() {
   useEffect(() => {
     if (!libraryShow) return;
     const token = ++loadToken.current;
-    const { car } = selection;
+    // Single-car mode: multi-car shows play the first car's part.
+    const car = 1;
     setError(undefined);
     playback.pause();
     setLoading({ label: `Downloading “${libraryShow.title}” from Tesla's repo…`, progress: 0 });
     const url = new URL(location.href);
     url.searchParams.set('show', libraryShow.id);
-    if (libraryShow.cars > 1) url.searchParams.set('car', String(car));
-    else url.searchParams.delete('car');
+    url.searchParams.delete('car');
     history.replaceState(null, '', url);
     loadLibraryShow(libraryShow, car, (p) => token === loadToken.current && setLoading((l) => l && { ...l, progress: p }))
-      .then((files) => present(libraryShow.title + (libraryShow.cars > 1 ? ` · Car ${car}` : ''), files, token))
+      .then((files) => present(libraryShow.title, files, token))
       .catch((e: unknown) => {
         if (token !== loadToken.current) return;
         setLoading(undefined);
         setError(e instanceof Error ? e.message : String(e));
       });
-  }, [libraryShow, selection, playback, present]);
+  }, [libraryShow, playback, present]);
 
   async function openFiles(list: FileList) {
     const files = Array.from(list);
@@ -252,18 +252,17 @@ export function App() {
         <label className="field">
           <span>Show</span>
           <select
-            value={fileName ? '__file' : selection.showId}
+            value={fileName ? '__file' : showId}
             onChange={(e) => {
               if (e.target.value === '__file') return;
               setFileName(undefined);
-              setSelection({ showId: e.target.value, car: 1 });
+              setShowId(e.target.value);
             }}
           >
             <optgroup label="Tesla examples">
               {LIBRARY.map((s) => (
                 <option key={s.id} value={s.id}>
                   {s.title}
-                  {s.cars > 1 ? ` (${s.cars} cars)` : ''}
                 </option>
               ))}
             </optgroup>
@@ -275,22 +274,14 @@ export function App() {
           </select>
         </label>
 
-        {libraryShow && libraryShow.cars > 1 && (
-          <span className="field">
-            <label className="field">
-              <span>Car position</span>
-              <select value={selection.car} onChange={(e) => setSelection({ ...selection, car: Number(e.target.value) })}>
-                {Array.from({ length: libraryShow.cars }, (_, i) => (
-                  <option key={i} value={i + 1}>
-                    {i + 1} of {libraryShow.cars}
-                    {i === 0 ? ' (leftmost)' : i === libraryShow.cars - 1 ? ' (rightmost)' : ''}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <CarPositionHelp cars={libraryShow.cars} />
-          </span>
-        )}
+        <div className="segmented" role="group" aria-label="Number of cars">
+          <button className={carMode === 'single' ? 'on' : ''} onClick={() => setCarMode('single')}>
+            Single car
+          </button>
+          <button className={carMode === 'multi' ? 'on' : ''} onClick={() => setCarMode('multi')}>
+            Multiple cars
+          </button>
+        </div>
 
         <label className="button">
           Open file…
@@ -372,10 +363,12 @@ export function App() {
         style={{ gridTemplate: layout === 'side' ? `1fr / ${split}fr 6px ${1 - split}fr` : `${split}fr 6px ${1 - split}fr / 1fr` }}
       >
         <section className="pane">
-          <CarView sim={sim} playback={playback} />
+          <CarView sim={sim} body={vehicle.body} playback={playback} />
           <div className="pane-badge">
-            {vehicle.name}
-            {vehicle.model !== 'modelX' && <span className="pane-badge-note">Previewed on a Model X body; its own 3D model is coming</span>}
+            {vehicle.name} · stylized mockup
+            {libraryShow && libraryShow.cars > 1 && (
+              <span className="pane-badge-note">Car 1 of this {libraryShow.cars}-car show</span>
+            )}
             {loaded && <span className="pane-badge-title">{loaded.title}</span>}
           </div>
         </section>
@@ -395,6 +388,21 @@ export function App() {
             <p className="pane-message">{error ? '' : 'Loading…'}</p>
           )}
         </section>
+
+        {carMode === 'multi' && (
+          <div className="overlay">
+            <div className="overlay-card">
+              <p className="popover-title">Multiple cars: coming later</p>
+              <p className="muted">
+                This mode will choreograph several cars parked side by side (Tesla supports synchronized shows across several cars),
+                with sweeps that travel from car to car and one show file per car. For now the editor works on a single car.
+              </p>
+              <button className="primary" onClick={() => setCarMode('single')}>
+                Back to single car
+              </button>
+            </div>
+          </div>
+        )}
 
         {(loading || error) && (
           <div className="overlay">

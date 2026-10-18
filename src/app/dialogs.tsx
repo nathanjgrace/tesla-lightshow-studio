@@ -170,31 +170,6 @@ export function UsbHelpDialog({ onClose }: { onClose: () => void }) {
   );
 }
 
-export function CarPositionHelp({ cars }: { cars: number }) {
-  const [open, setOpen] = useState(false);
-  return (
-    <span className="help-wrap">
-      <button className="icon help" onClick={() => setOpen((o) => !o)} aria-label="What does Car 1, Car 2 mean?">
-        ?
-      </button>
-      {open && (
-        <div className="popover narrow" role="dialog">
-          <p className="popover-title">Multi-car shows</p>
-          <p>
-            This show is choreographed for {cars} cars parked side by side, all playing at the same moment. Each car gets its own show
-            file so the lights can sweep from car to car.
-          </p>
-          <p>
-            Facing the cars from the front, they're numbered <strong>1 to {cars} from left to right</strong>. Pick a number to see that
-            car's part. Load each car's file onto that car's USB drive and start them together.
-          </p>
-          <button onClick={() => setOpen(false)}>Got it</button>
-        </div>
-      )}
-    </span>
-  );
-}
-
 interface ExportProps {
   defaultName: string;
   startMs: number;

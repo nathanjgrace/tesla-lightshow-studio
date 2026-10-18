@@ -51,3 +51,12 @@ describe('decodeVin', () => {
     expect(checkDigit('1HGCM82633A004352')).toBe('3');
   });
 });
+
+describe('decodeVin trims', () => {
+  it('offers Premium and Standard for a 2026 Model Y', () => {
+    // 7SAYGDEE?TF000123 with a valid check digit
+    const vin = '7SAYGDEE' + 'X' + 'TF000123';
+    const fixed = vin.slice(0, 8) + checkDigit(vin) + vin.slice(9);
+    expect(decodeVin(fixed).candidates.map((c) => c.id)).toEqual(['modelY-2025', 'modelY-2026-standard']);
+  });
+});

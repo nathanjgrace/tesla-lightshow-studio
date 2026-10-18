@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import type { Simulation } from '../core/simulate';
-import { CAMERA_PRESETS, ModelXScene, type Finish } from './car/ModelXScene';
+import type { BodyStyle } from '../core/vehicles';
+import { CAMERA_PRESETS, CarScene, type Finish } from './car/CarScene';
 import type { Playback } from './playback';
 
 function storedFinish(): Finish {
@@ -11,9 +12,9 @@ function storedFinish(): Finish {
   }
 }
 
-export function CarView({ sim, playback }: { sim: Simulation | undefined; playback: Playback }) {
+export function CarView({ sim, body, playback }: { sim: Simulation | undefined; body: BodyStyle; playback: Playback }) {
   const host = useRef<HTMLDivElement>(null);
-  const [scene, setScene] = useState<ModelXScene>();
+  const [scene, setScene] = useState<CarScene>();
   const [error, setError] = useState<string>();
   const [finish, setFinish] = useState<Finish>(storedFinish);
 
@@ -28,18 +29,20 @@ export function CarView({ sim, playback }: { sim: Simulation | undefined; playba
 
   useEffect(() => {
     const el = host.current!;
-    let s: ModelXScene;
+    let s: CarScene;
     try {
-      s = new ModelXScene(el);
+      s = new CarScene(el);
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
       return;
     }
     setScene(s);
     // Lets automated browser checks inspect the scene during development.
-    if (import.meta.env.DEV) (window as unknown as { __scene: ModelXScene }).__scene = s;
+    if (import.meta.env.DEV) (window as unknown as { __scene: CarScene }).__scene = s;
     return () => s.dispose();
   }, []);
+
+  useEffect(() => scene?.setBody(body), [scene, body]);
 
   useEffect(() => {
     if (!scene) return;

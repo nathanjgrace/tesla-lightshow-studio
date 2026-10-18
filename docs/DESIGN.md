@@ -148,7 +148,8 @@ audio ──▶ analysis (Worker) ──▶ choreograph(style, profile) ──�
 | **M3 Auto-generate v1** | essentia.js analysis, beat-driven lights, style presets, closure planner | |
 | **M4 Vehicle profiles** | All models and versions in a grouped menu, local VIN decoding with version picker, combined-light (OR) and ramp quirks in the simulation | ✅ first pass |
 | **M5 Expert parity** | Layers, value curves, timing tracks, `.xsq` import, shortcuts | |
-| **M6 More cars** | 3D bodies for Model S, 3, Y, Cybertruck (light bars, RGB); per-variant lights in the preview | |
+| **M6 More cars** | 3D bodies for Model S, 3, Y, Cybertruck (light bars, RGB); per-version and per-trim lights in the preview | ✅ first pass (stylized) |
+| **M7a Multi-car** | Several cars side by side, cross-car sweeps, one file per car | placeholder |
 | **M6a HQ assets** | Licensed or commissioned high-quality 3D models (glTF) per model and version, replacing the code-built bodies; light/closure wiring stays the same | later |
 | **M6b Paint** | Factory paint colors per model and year, plus a Tesla-style custom picker with finish (gloss/matte/metallic) | later, low priority |
 | **M7 Community** | Accounts, cloud projects, share/browse shows, multi-car shows | |
@@ -175,9 +176,13 @@ Tesla's official example shows are loaded straight from Tesla's GitHub repo at r
 
 Community shows (xlightshows.io, teslalightshare.io) are a later addition. They need permission from those sites or their authors before we pull them in.
 
-## 10b. 3D model
+## 10b. 3D models
 
-Tesla publishes 3D models only for the Model S and Cybertruck (in its xLights project). The Model X in the app is built in code (`src/app/car/ModelXScene.ts`): stylized, with every light channel placed per Tesla's diagram, and working falcon wings, front doors, liftgate, mirrors, windows and charge port. A detailed licensed model can replace the body later; light and closure wiring stays the same.
+Tesla publishes 3D models only for the Model S and Cybertruck (in its xLights project). The app builds a stylized body for every model in code (`src/app/car/bodies.ts`), sized from published dimensions: Model S, 3, X and Y share one builder with per-model profiles, and the Cybertruck has its own. Each vehicle version carries a `BodyStyle` (in `src/core/vehicles.ts`) for the hardware that differs by version and trim: refreshed slim headlights (2024+ Model 3, 2025+ Model Y), fog lamps, Model Y Premium front and rear light bars, and Cybertruck light bars (individually driven LEDs). Closures are modeled per car: falcon wings and front doors (X), door handles (S), liftgate (S, X, Y), trunk lid (3) and powered frunk (Cybertruck). High-quality licensed models (M6a) can replace the bodies later; the light and closure wiring stays the same.
+
+## 10c. Single car first
+
+The editor works on one car. A **Single car / Multiple cars** switch is in the toolbar; Multiple cars shows a placeholder for now. Tesla's multi-car example shows play their first car's part.
 
 ## 11. Risks
 

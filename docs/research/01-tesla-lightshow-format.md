@@ -204,12 +204,16 @@ Profiles live in `src/core/vehicles.ts`. What each is based on:
 | Model S 2021+ | README tables; aux park + side markers combined per side; door handles | **[doc]** |
 | Model 3 2017 – Oct 2020 | README: tails and license plate operate together, license channel ignored | **[doc]** |
 | Model 3 Oct 2020 – 2023 | README Model 3/Y rules (ch 4–6 one light per side; all aux park + side markers combined); no fogs/aux park on Standard Range Plus | **[doc]** |
-| Model 3 2024+ | Same rules plus interior accent lights; fog lights unconfirmed | **[unverified]** |
+| Model 3 2024+ Premium / Performance | Same rules plus interior accent lights; front fogs reportedly removed with the refresh | **[unverified]** |
+| Model 3 2026+ Standard | As above without the interior accent lights (and without matrix headlights) | **[unverified]**, press reports |
 | Model X 2021 – 2024 | README tables | **[doc]** |
 | Model X 2025+ | As 2021, plus accent RGB lights (reported ambient lighting) | **[unverified]** |
 | Model Y 2020 – 2024 | README Model 3/Y rules; liftgate only with power liftgate | **[doc]** |
-| Model Y 2025+ | Released after Tesla's last README update (Dec 2024); front light bar mapping unknown | **[unverified]** |
+| Model Y 2025+ Premium / Performance | Released after Tesla's last README update (Dec 2024). Has front and rear light bars and accent lights. **Which channels drive the light bars is undocumented**; the preview assumes signature → front bar, tails → rear bar | **[unverified]** |
+| Model Y 2026+ Standard | No front light bar, single-piece headlights (no matrix), no colored ambient lighting. Sources conflict on whether the rear light strip lights up (Edmunds/ArenaEV: removed; Tesla Oracle: strip present, only corner brake lights lit); the preview leaves it dark | **[unverified]**, press reports |
 | Cybertruck 2024+ | README remapping (reverse via tails, bed lights via reverse, frunk via liftgate, frunk light via aux park, rear turn disabled), light bars | **[doc]** |
+
+Trim sources: [Edmunds, 2026 Model Y Standard](https://www.edmunds.com/car-news/2026-tesla-model-y-standard-debut-first-look.html), [Tesla Oracle, Model Y Standard missing features](https://www.teslaoracle.com/2025/10/08/stripped-down-tesla-model-y-standard-is-here-price-range-missing-features/), [ArenaEV, Model Y Standard vs Premium](https://www.arenaev.com/10_things_you_lose_with_the_tesla_model_y_standard_-news-5256.php), [Tesery, Tesla fog lights guide](https://www.tesery.com/blogs/tesla-accessories-information/tesla-fog-lights-guide), [Notebookcheck, Juniper light bar](https://www.notebookcheck.net/2025-Tesla-Model-Y-Juniper-refresh-light-bar-can-be-switched-off.953038.0.html). Trims can't be told apart by VIN year alone, so a 2026 Model Y VIN offers both Premium and Standard.
 
 VIN decoding (`src/core/vin.ts`) uses the standard VIN layout: position 4 is Tesla's model letter (S, 3, X, Y, C), 9 the check digit, 10 the model year, 11 the plant. It runs locally. Model years that span two versions (Model 3 2020, Model Y 2025) show both with a distinguishing hint. Region and options (side markers, rear fogs, Standard Range Plus, power liftgate) can't be read from the VIN; the composer marks those rows with *.
 
