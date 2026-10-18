@@ -35,6 +35,12 @@ Sources: [That Lightshow](https://thatteslalightshow.com/), [Light Show Creator]
 | Show library / sharing | Tesla examples ✅; community sharing later (M7) |
 | Flash-rate safety limit | To add to the validator |
 | Beat grid snapping | Next, comes with audio analysis |
+| Many audio formats (That Lightshow takes MP3, WAV, M4A, AAC, OGG, FLAC) | ✅ same set plus Opus; always exported as 44.1 kHz WAV |
+| Drag a song onto the page to start | ✅ |
+
+## Decisions
+
+- **No importing songs from YouTube or streaming services.** Jowua's tool takes a YouTube link, but downloading YouTube audio breaks YouTube's terms and copyright law, browsers can't fetch it without a download server, and an open-source project doing it is a takedown target (GitHub removed youtube-dl over a DMCA notice in 2020). Spotify and Apple Music are copy-protected. We follow That Lightshow's "bring your own music" approach and make it as fast as possible: drop in any common format. A legitimate way to search by name would be a catalog of freely licensed music (e.g. Jamendo's API, which needs a registered app key).
 
 ## Notes
 

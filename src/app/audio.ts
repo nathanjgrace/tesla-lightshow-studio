@@ -31,8 +31,15 @@ export async function computePeaks(audio: Blob, bucketMs = 10): Promise<Peaks> {
 }
 
 /** A song's length, for starting a blank show that matches it. */
-export async function audioDurationMs(audio: Blob): Promise<number> {
+export async function audioDurationMs(audio: Blob, name: string): Promise<number> {
   const context = new OfflineAudioContext(1, 1, 44100);
-  const buffer = await context.decodeAudioData(await audio.arrayBuffer());
-  return buffer.duration * 1000;
+  try {
+    const buffer = await context.decodeAudioData(await audio.arrayBuffer());
+    return buffer.duration * 1000;
+  } catch {
+    const ext = name.split('.').pop()?.toUpperCase() ?? 'this';
+    throw new Error(
+      `This browser can't read ${ext} audio. Try an MP3 or WAV of the song, or open this page in Chrome, Edge or Safari (they read M4A/AAC too).`,
+    );
+  }
 }

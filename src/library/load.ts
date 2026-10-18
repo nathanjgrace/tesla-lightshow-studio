@@ -25,7 +25,7 @@ export async function loadLibraryShow(show: LibraryShow, car: number, onProgress
 /** Picks the .fseq and audio out of a zip, ignoring macOS metadata folders. */
 export function fromZip(zip: Uint8Array): LoadedFiles {
   const files = unzipSync(zip, {
-    filter: (f) => !f.name.includes('__MACOSX') && /\.(fseq|wav|mp3)$/i.test(f.name),
+    filter: (f) => !f.name.includes('__MACOSX') && (/\.fseq$/i.test(f.name) || isAudioFile(f.name)),
   });
   let fseq: Uint8Array | undefined;
   let audio: Blob | undefined;
@@ -37,8 +37,30 @@ export function fromZip(zip: Uint8Array): LoadedFiles {
   return { fseq, ...(audio ? { audio } : {}) };
 }
 
+/** Audio formats browsers can decode; exports are always converted to 44.1 kHz WAV for the car. */
+const AUDIO_TYPES: Record<string, string> = {
+  mp3: 'audio/mpeg',
+  wav: 'audio/wav',
+  m4a: 'audio/mp4',
+  aac: 'audio/aac',
+  flac: 'audio/flac',
+  ogg: 'audio/ogg',
+  oga: 'audio/ogg',
+  opus: 'audio/ogg',
+  webm: 'audio/webm',
+};
+
+/** For file pickers. */
+export const AUDIO_ACCEPT = Object.keys(AUDIO_TYPES)
+  .map((ext) => `.${ext}`)
+  .join(',');
+
+export function isAudioFile(name: string): boolean {
+  return (name.split('.').pop()?.toLowerCase() ?? '') in AUDIO_TYPES;
+}
+
 export function audioType(name: string): string {
-  return /\.mp3$/i.test(name) ? 'audio/mpeg' : 'audio/wav';
+  return AUDIO_TYPES[name.split('.').pop()?.toLowerCase() ?? ''] ?? 'audio/wav';
 }
 
 function encodePath(path: string): string {

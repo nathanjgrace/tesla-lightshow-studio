@@ -7,6 +7,7 @@ import {
   FilePlus2,
   FolderOpen,
   Library,
+  Music,
   Pause,
   Play,
   Rows2,
@@ -35,7 +36,7 @@ import { simulate } from '../core/simulate';
 import { formatTime, validate } from '../core/validate';
 import { DEFAULT_VEHICLE_ID, VEHICLES_BY_ID, vehiclesByModel, type VehicleProfile } from '../core/vehicles';
 import { DEFAULT_SHOW_ID, LIBRARY, type LibraryShow } from '../library/catalog';
-import { audioType, fromZip, loadLibraryShow, type LoadedFiles } from '../library/load';
+import { AUDIO_ACCEPT, audioType, fromZip, isAudioFile, loadLibraryShow, type LoadedFiles } from '../library/load';
 import { audioDurationMs, computePeaks, type Peaks } from './audio';
 import { CarView } from './CarView';
 import { Composer, type Range } from './Composer';
@@ -185,14 +186,14 @@ export function App() {
       let loadedFiles: LoadedFiles;
       const zip = files.find((f) => /\.zip$/i.test(f.name));
       const fseq = files.find((f) => /\.fseq$/i.test(f.name));
-      const audio = files.find((f) => /\.(wav|mp3)$/i.test(f.name));
+      const audio = files.find((f) => isAudioFile(f.name));
       if (zip) loadedFiles = fromZip(new Uint8Array(await zip.arrayBuffer()));
       else if (fseq) {
         loadedFiles = {
           fseq: new Uint8Array(await fseq.arrayBuffer()),
           ...(audio ? { audio: new Blob([audio], { type: audioType(audio.name) }) } : {}),
         };
-      } else throw new Error('Choose a .fseq file (and optionally its .wav/.mp3), or a .zip');
+      } else throw new Error('Choose a .fseq file (and optionally its music), or a .zip');
       const name = (zip ?? fseq)!.name;
       clearUrl();
       await open(name.replace(/\.(zip|fseq)$/i, ''), { kind: 'file', name }, loadedFiles, token);
@@ -207,13 +208,43 @@ export function App() {
     playback.pause();
     try {
       const audio = new Blob([file], { type: audioType(file.name) });
-      const blankMs = await audioDurationMs(audio);
+      const blankMs = await audioDurationMs(audio, file.name);
       clearUrl();
       await open(file.name.replace(/\.[^.]+$/, ''), { kind: 'new', name: file.name }, { audio, blankMs }, token);
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     }
   }
+
+  // Drag and drop anywhere: a song starts a new show; a .fseq or .zip opens one.
+  const [dropping, setDropping] = useState(false);
+  const dragDepth = useRef(0);
+  const dropHandlers = {
+    onDragEnter: (e: React.DragEvent) => {
+      if (!e.dataTransfer.types.includes('Files')) return;
+      dragDepth.current++;
+      setDropping(true);
+    },
+    onDragLeave: () => {
+      dragDepth.current = Math.max(0, dragDepth.current - 1);
+      if (dragDepth.current === 0) setDropping(false);
+    },
+    onDragOver: (e: React.DragEvent) => {
+      if (e.dataTransfer.types.includes('Files')) e.preventDefault();
+    },
+    onDrop: (e: React.DragEvent) => {
+      e.preventDefault();
+      dragDepth.current = 0;
+      setDropping(false);
+      const files = Array.from(e.dataTransfer.files);
+      if (files.some((f) => /\.(fseq|zip)$/i.test(f.name))) void openFiles(e.dataTransfer.files);
+      else {
+        const song = files.find((f) => isAudioFile(f.name));
+        if (song) void newFromSong(song);
+        else setError(`Couldn't use ${files[0]?.name ?? 'that'}: drop a song (MP3, WAV, M4A, FLAC, OGG) or a .fseq/.zip show`);
+      }
+    },
+  };
 
   function chooseVehicle(v: VehicleProfile) {
     setVehicle(v);
@@ -340,7 +371,16 @@ export function App() {
   const libraryId = doc?.source.kind === 'library' ? doc.source.id : undefined;
 
   return (
-    <div className="app">
+    <div className="app" {...dropHandlers}>
+      {dropping && (
+        <div className="drop-overlay">
+          <div className="drop-card">
+            <Music size={28} />
+            <p className="drop-title">Drop to open</p>
+            <p className="muted">A song starts a new show · a .fseq or .zip opens an existing one</p>
+          </div>
+        </div>
+      )}
       <header className="topbar">
         <div className="tb-left">
           <span className="brand" title="Lightshow Studio">
@@ -359,7 +399,7 @@ export function App() {
             sections={[
               {
                 items: [
-                  { id: 'new', label: 'New show from a song…', hint: 'Start blank with your own music', icon: <FilePlus2 size={15} />, onSelect: () => songInput.current?.click() },
+                  { id: 'new', label: 'New show from a song…', hint: 'MP3, WAV, M4A, FLAC or OGG · or drop it anywhere', icon: <FilePlus2 size={15} />, onSelect: () => songInput.current?.click() },
                   { id: 'open', label: 'Open a show file…', hint: '.fseq (plus its music) or .zip', icon: <FolderOpen size={15} />, onSelect: () => openInput.current?.click() },
                 ],
               },
@@ -372,7 +412,7 @@ export function App() {
           <input
             ref={songInput}
             type="file"
-            accept=".wav,.mp3,audio/*"
+            accept={`${AUDIO_ACCEPT},audio/*`}
             hidden
             onChange={(e) => {
               const f = e.target.files?.[0];
@@ -384,7 +424,7 @@ export function App() {
             ref={openInput}
             type="file"
             multiple
-            accept=".fseq,.wav,.mp3,.zip"
+            accept={`.fseq,.zip,${AUDIO_ACCEPT}`}
             hidden
             onChange={(e) => {
               if (e.target.files?.length) void openFiles(e.target.files);

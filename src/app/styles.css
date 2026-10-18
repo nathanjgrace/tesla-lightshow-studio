@@ -933,3 +933,39 @@ button.choice {
     display: none;
   }
 }
+
+/* Drag and drop */
+
+.drop-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  display: grid;
+  place-items: center;
+  background: rgb(8 9 11 / 0.7);
+  backdrop-filter: blur(6px);
+  pointer-events: none;
+}
+
+.drop-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  padding: 36px 56px;
+  border: 2px dashed var(--accent);
+  border-radius: 18px;
+  background: rgb(232 33 39 / 0.06);
+  color: #ff8a8d;
+  text-align: center;
+}
+
+.drop-card p {
+  margin: 0;
+}
+
+.drop-title {
+  font-size: 18px;
+  font-weight: 650;
+  color: var(--fg);
+}
