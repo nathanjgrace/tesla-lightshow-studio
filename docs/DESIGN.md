@@ -144,8 +144,8 @@ audio ──▶ analysis (Worker) ──▶ choreograph(style, profile) ──�
 |---|---|---|
 | **M0 Foundation** | Project setup, FSEQ read/write, validator, file-check page | ✅ done |
 | **M1 Playback** | Editor layout (side-by-side / stacked), 3D Model X with working closures, composer timeline with waveform, Tesla example library, audio-synced playback | ✅ first pass |
-| **M2 Editor basics** | Project model, compile, timeline, place/move effects, export zip | next |
-| **M3 Auto-generate v1** | essentia.js analysis, beat-driven lights, style presets, closure planner | |
+| **M2 Editor basics** | Project model (effects compiled to frames, lossless import of any .fseq), draw/move/resize/select effects, undo/redo, copy/paste/duplicate, mirror L↔R, xLights hotkeys, snap, inspector, new show from a song | ✅ first pass |
+| **M3 Auto-generate v1** | essentia.js analysis, beat grid + snapping, beat-driven lights, style presets, closure planner | next (biggest gap vs competitors, see COMPETITION.md) |
 | **M4 Vehicle profiles** | All models and versions in a grouped menu, local VIN decoding with version picker, combined-light (OR) and ramp quirks in the simulation | ✅ first pass |
 | **M5 Expert parity** | Layers, value curves, timing tracks, `.xsq` import, shortcuts | |
 | **M6 More cars** | 3D bodies for Model S, 3, Y, Cybertruck (light bars, RGB); per-version and per-trim lights in the preview | ✅ first pass (stylized) |

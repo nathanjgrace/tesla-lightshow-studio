@@ -22,5 +22,9 @@ Web app for creating Tesla light shows (`.fseq` + audio on a USB drive). Plan: `
 
 ## Checking the UI
 
-- Dev builds expose `window.__playback` (seek/play) and `window.__scene` (3D scene) for automated browser checks; production builds don't.
+- Dev builds expose `window.__playback` (seek/play), `window.__editor` (project, selection) and `window.__scene` (3D scene) for automated browser checks; production builds don't.
 - `VITE_LIBRARY_BASE` points the show library at another URL (e.g. a local copy of Tesla's `examples/` folder) when GitHub isn't reachable.
+
+## Product direction
+
+Aim to be the obvious best Tesla light show editor: desktop-first, modern and polished. Track competitors in `docs/COMPETITION.md` and keep suggesting features that widen the lead.

@@ -4,7 +4,7 @@ A web app for creating custom Tesla light shows: one click to auto-generate a sh
 
 > **Try it:** <https://nathanjgrace.github.io/tesla-lightshow-studio/>
 >
-> **Status:** early development. The app opens in an editor with a 3D Model X and a timeline composer, and can play Tesla's official example shows or your own `.fseq` files in sync with their music. Creating and editing shows comes next. See [docs/DESIGN.md](docs/DESIGN.md) for the plan.
+> **Status:** early development. The app opens in an editor with a 3D preview of your exact Tesla and a timeline composer. Create a show from any song, or open Tesla's examples or any `.fseq`, edit every light and door effect, and export a USB-ready zip. See [docs/DESIGN.md](docs/DESIGN.md) for the plan.
 
 ## Running it on your own computer
 

@@ -29,3 +29,10 @@ export async function computePeaks(audio: Blob, bucketMs = 10): Promise<Peaks> {
   }
   return { bucketMs, min, max };
 }
+
+/** A song's length, for starting a blank show that matches it. */
+export async function audioDurationMs(audio: Blob): Promise<number> {
+  const context = new OfflineAudioContext(1, 1, 44100);
+  const buffer = await context.decodeAudioData(await audio.arrayBuffer());
+  return buffer.duration * 1000;
+}

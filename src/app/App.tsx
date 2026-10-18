@@ -1,27 +1,62 @@
+import {
+  Car,
+  CircleCheck,
+  CircleHelp,
+  Columns2,
+  Download,
+  FilePlus2,
+  FolderOpen,
+  Library,
+  Pause,
+  Play,
+  Rows2,
+  Search,
+  SkipBack,
+  TriangleAlert,
+  User,
+  Users,
+} from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
 import { showFileName } from '../core/export';
-import { readFseq, type FseqFile } from '../core/fseq';
+import { readFseq } from '../core/fseq';
+import {
+  blankProject,
+  compileProject,
+  effectFamily,
+  EFFECT_HOTKEYS,
+  isClosureKind,
+  mirrored,
+  newEffectId,
+  projectFromShow,
+  type Effect,
+  type EffectKind,
+} from '../core/project';
 import { simulate } from '../core/simulate';
-import { formatTime, validate, type Issue } from '../core/validate';
+import { formatTime, validate } from '../core/validate';
 import { DEFAULT_VEHICLE_ID, VEHICLES_BY_ID, vehiclesByModel, type VehicleProfile } from '../core/vehicles';
 import { DEFAULT_SHOW_ID, LIBRARY, type LibraryShow } from '../library/catalog';
 import { audioType, fromZip, loadLibraryShow, type LoadedFiles } from '../library/load';
-import { computePeaks, type Peaks } from './audio';
+import { audioDurationMs, computePeaks, type Peaks } from './audio';
 import { CarView } from './CarView';
 import { Composer, type Range } from './Composer';
+import { ComposerBar } from './ComposerBar';
 import { ExportDialog, UsbHelpDialog, VinDialog } from './dialogs';
 import { exportFseq, exportUsbZip } from './exportShow';
+import { Menu } from './Menu';
 import { Playback } from './playback';
+import { useEditor } from './useEditor';
 
 type Layout = 'side' | 'stack';
 type CarMode = 'single' | 'multi';
 type Modal = 'vin' | 'export' | 'help' | undefined;
 
-interface Loaded {
+interface Doc {
+  /** Changes whenever a different show is opened. */
+  key: string;
   title: string;
-  show: FseqFile;
-  issues: Issue[];
   audio: Blob | undefined;
+  /** Where it came from, for the File menu. */
+  source: { kind: 'library'; id: string } | { kind: 'file'; name: string } | { kind: 'new'; name: string };
 }
 
 function stored(key: string): string | null {
@@ -45,32 +80,28 @@ function initialShowId(): string {
   return LIBRARY.find((s) => s.id === id)?.id ?? DEFAULT_SHOW_ID;
 }
 
-const VIN_OPTION = '__vin';
+let docCounter = 0;
 
 export function App() {
   const playback = useMemo(() => new Playback(), []);
-  // Lets automated browser checks drive playback during development.
-  if (import.meta.env.DEV) (window as unknown as { __playback: Playback }).__playback = playback;
+  const editor = useEditor();
+  // Lets automated browser checks drive the app during development.
+  if (import.meta.env.DEV) Object.assign(window, { __playback: playback, __editor: editor });
   const playing = useSyncExternalStore(
     (cb) => playback.subscribeState(cb),
     () => playback.isPlaying,
   );
 
-  const [layout, setLayout] = useState<Layout>(() => {
-    const v = stored('layout');
-    return v === 'side' || v === 'stack' ? v : window.innerWidth < 800 ? 'stack' : 'side';
-  });
+  const [layout, setLayout] = useState<Layout>(() => (stored('layout') === 'stack' ? 'stack' : 'side'));
   const [split, setSplit] = useState(() => {
     const v = Number(stored('split'));
-    return v > 0.15 && v < 0.85 ? v : 0.5;
+    return v > 0.15 && v < 0.85 ? v : 0.38;
   });
   const [vehicle, setVehicle] = useState<VehicleProfile>(
     () => VEHICLES_BY_ID.get(stored('vehicle') ?? '') ?? VEHICLES_BY_ID.get(DEFAULT_VEHICLE_ID)!,
   );
-  const [showId, setShowId] = useState(initialShowId);
   const [carMode, setCarMode] = useState<CarMode>('single');
-  const [fileName, setFileName] = useState<string>();
-  const [loaded, setLoaded] = useState<Loaded>();
+  const [doc, setDoc] = useState<Doc>();
   const [range, setRange] = useState<Range>({ startMs: 0, endMs: 0 });
   const [peaks, setPeaks] = useState<Peaks>();
   const [loading, setLoading] = useState<{ label: string; progress?: number }>();
@@ -78,18 +109,24 @@ export function App() {
   const [checksOpen, setChecksOpen] = useState(false);
   const [modal, setModal] = useState<Modal>();
   const loadToken = useRef(0);
+  const zoomRef = useRef<(factor: number | 'fit') => void>(undefined);
+  const clipboard = useRef<Effect[]>([]);
+  const openInput = useRef<HTMLInputElement>(null);
+  const songInput = useRef<HTMLInputElement>(null);
 
-  const libraryShow: LibraryShow | undefined = fileName ? undefined : LIBRARY.find((s) => s.id === showId);
-  // Re-simulated when the vehicle changes; the show itself stays loaded.
-  const sim = useMemo(() => (loaded ? simulate(loaded.show, vehicle) : undefined), [loaded, vehicle]);
-  const durationMs = loaded ? loaded.show.frameCount * loaded.show.stepTimeMs : 0;
+  // The show is compiled from the editable project; everything else derives from it.
+  const show = useMemo(() => (editor.project ? compileProject(editor.project) : undefined), [editor.project]);
+  const sim = useMemo(() => (show ? simulate(show, vehicle) : undefined), [show, vehicle]);
+  const issues = useMemo(() => (show ? validate(show) : []), [show]);
+  const durationMs = show ? show.frameCount * show.stepTimeMs : 0;
 
-  const present = useCallback(
-    async (title: string, files: LoadedFiles, token: number) => {
-      const show = readFseq(files.fseq);
+  const open = useCallback(
+    async (title: string, source: Doc['source'], files: LoadedFiles | { audio: Blob; blankMs: number }, token: number) => {
+      const project = 'blankMs' in files ? blankProject(files.blankMs) : projectFromShow(readFseq(files.fseq));
       if (token !== loadToken.current) return;
-      const duration = show.frameCount * show.stepTimeMs;
-      setLoaded({ title, show, issues: validate(show), audio: files.audio });
+      const duration = project.frameCount * project.stepTimeMs;
+      editor.load(project);
+      setDoc({ key: String(++docCounter), title, audio: files.audio, source });
       setRange({ startMs: 0, endMs: duration });
       setPeaks(undefined);
       playback.setSource(files.audio, duration);
@@ -100,30 +137,44 @@ export function App() {
           .catch(() => {});
       }
     },
-    [playback],
+    [playback, editor],
   );
 
-  // Load the selected library show.
+  const openLibrary = useCallback(
+    (show: LibraryShow) => {
+      const token = ++loadToken.current;
+      setError(undefined);
+      playback.pause();
+      setLoading({ label: `Downloading “${show.title}” from Tesla's repo…`, progress: 0 });
+      const url = new URL(location.href);
+      url.searchParams.set('show', show.id);
+      url.searchParams.delete('car');
+      history.replaceState(null, '', url);
+      // Single-car mode: multi-car shows play the first car's part.
+      loadLibraryShow(show, 1, (p) => token === loadToken.current && setLoading((l) => l && { ...l, progress: p }))
+        .then((files) => open(show.title, { kind: 'library', id: show.id }, files, token))
+        .catch((e: unknown) => {
+          if (token !== loadToken.current) return;
+          setLoading(undefined);
+          setError(e instanceof Error ? e.message : String(e));
+        });
+    },
+    [open, playback],
+  );
+
+  // Open the default (or linked) example on first load.
+  const started = useRef(false);
   useEffect(() => {
-    if (!libraryShow) return;
-    const token = ++loadToken.current;
-    // Single-car mode: multi-car shows play the first car's part.
-    const car = 1;
-    setError(undefined);
-    playback.pause();
-    setLoading({ label: `Downloading “${libraryShow.title}” from Tesla's repo…`, progress: 0 });
+    if (started.current) return;
+    started.current = true;
+    openLibrary(LIBRARY.find((s) => s.id === initialShowId())!);
+  }, [openLibrary]);
+
+  function clearUrl() {
     const url = new URL(location.href);
-    url.searchParams.set('show', libraryShow.id);
-    url.searchParams.delete('car');
+    url.search = '';
     history.replaceState(null, '', url);
-    loadLibraryShow(libraryShow, car, (p) => token === loadToken.current && setLoading((l) => l && { ...l, progress: p }))
-      .then((files) => present(libraryShow.title, files, token))
-      .catch((e: unknown) => {
-        if (token !== loadToken.current) return;
-        setLoading(undefined);
-        setError(e instanceof Error ? e.message : String(e));
-      });
-  }, [libraryShow, playback, present]);
+  }
 
   async function openFiles(list: FileList) {
     const files = Array.from(list);
@@ -143,11 +194,22 @@ export function App() {
         };
       } else throw new Error('Choose a .fseq file (and optionally its .wav/.mp3), or a .zip');
       const name = (zip ?? fseq)!.name;
-      setFileName(name);
-      const url = new URL(location.href);
-      url.search = '';
-      history.replaceState(null, '', url);
-      await present(name.replace(/\.(zip|fseq)$/i, ''), loadedFiles, token);
+      clearUrl();
+      await open(name.replace(/\.(zip|fseq)$/i, ''), { kind: 'file', name }, loadedFiles, token);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    }
+  }
+
+  async function newFromSong(file: File) {
+    const token = ++loadToken.current;
+    setError(undefined);
+    playback.pause();
+    try {
+      const audio = new Blob([file], { type: audioType(file.name) });
+      const blankMs = await audioDurationMs(audio);
+      clearUrl();
+      await open(file.name.replace(/\.[^.]+$/, ''), { kind: 'new', name: file.name }, { audio, blankMs }, token);
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     }
@@ -158,19 +220,86 @@ export function App() {
     store('vehicle', v.id);
   }
 
-  // Keyboard: space = play/pause, Home = back to start.
+  const selectedEffects = useCallback(
+    () => editor.project?.effects.filter((e) => editor.selection.has(e.id)) ?? [],
+    [editor],
+  );
+
+  const mirrorSelection = useCallback(() => {
+    const copies = mirrored(selectedEffects());
+    if (copies.length) editor.place(copies, false);
+  }, [editor, selectedEffects]);
+
+  const changeSelected = useCallback(
+    (change: (e: Effect) => Effect) => {
+      const changed = selectedEffects().map(change);
+      if (changed.length) editor.place(changed);
+    },
+    [editor, selectedEffects],
+  );
+
+  // Keyboard: transport, editing, and Tesla's xLights hotkeys for effect types.
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       const target = e.target as HTMLElement;
-      if (modal || /^(INPUT|SELECT|TEXTAREA|BUTTON)$/.test(target.tagName)) return;
+      if (modal || /^(INPUT|SELECT|TEXTAREA)$/.test(target.tagName)) return;
+      const mod = e.ctrlKey || e.metaKey;
+      const key = e.key.toLowerCase();
       if (e.code === 'Space') {
         e.preventDefault();
         playback.toggle();
       } else if (e.code === 'Home') playback.seek(0);
+      else if (mod && key === 'z') {
+        e.preventDefault();
+        if (e.shiftKey) editor.redo();
+        else editor.undo();
+      } else if (mod && key === 'y') {
+        e.preventDefault();
+        editor.redo();
+      } else if (mod && key === 'a') {
+        e.preventDefault();
+        editor.select(editor.project?.effects.map((fx) => fx.id) ?? []);
+      } else if (mod && key === 'c') {
+        clipboard.current = selectedEffects();
+      } else if (mod && key === 'x') {
+        clipboard.current = selectedEffects();
+        editor.remove(editor.selection);
+      } else if (mod && key === 'v' && clipboard.current.length) {
+        e.preventDefault();
+        // Paste at the playhead, keeping the copied effects' spacing.
+        const first = Math.min(...clipboard.current.map((fx) => fx.startMs));
+        const at = playback.timeMs();
+        editor.place(clipboard.current.map((fx) => ({ ...fx, id: newEffectId(), startMs: fx.startMs - first + at, endMs: fx.endMs - first + at })));
+      } else if (mod && key === 'd') {
+        e.preventDefault();
+        const sel = selectedEffects();
+        if (!sel.length) return;
+        const span = Math.max(...sel.map((fx) => fx.endMs)) - Math.min(...sel.map((fx) => fx.startMs));
+        editor.place(sel.map((fx) => ({ ...fx, id: newEffectId(), startMs: fx.startMs + span, endMs: fx.endMs + span })));
+      } else if (key === 'delete' || key === 'backspace') {
+        e.preventDefault();
+        editor.remove(editor.selection);
+      } else if (key === 'escape') editor.select([]);
+      else if (key === 'm' && !mod) mirrorSelection();
+      else if (!mod && EFFECT_HOTKEYS[key]) {
+        // Like xLights: the hotkey changes the selected effects (F is Stop on doors) and sets the brush.
+        const kind = EFFECT_HOTKEYS[key]!;
+        const kindFor = (fx: Effect): EffectKind | undefined => {
+          if (effectFamily(fx.channel) === 'closure') return key === 'f' ? 'stop' : isClosureKind(kind) ? kind : undefined;
+          return isClosureKind(kind) ? undefined : kind;
+        };
+        const changed = selectedEffects().flatMap((fx) => {
+          const k = kindFor(fx);
+          return k ? [{ ...fx, kind: k }] : [];
+        });
+        if (changed.length) editor.place(changed);
+        if (isClosureKind(kind)) editor.setClosureBrush(kind);
+        else editor.setLightBrush(kind);
+      }
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [playback, modal]);
+  }, [playback, modal, editor, selectedEffects, mirrorSelection]);
 
   const timeRef = useRef<HTMLSpanElement>(null);
   useEffect(
@@ -183,8 +312,7 @@ export function App() {
 
   const panes = useRef<HTMLDivElement>(null);
   function startDrag(e: React.PointerEvent) {
-    const el = panes.current!;
-    const rect = el.getBoundingClientRect();
+    const rect = panes.current!.getBoundingClientRect();
     const move = (ev: PointerEvent) => {
       const f = layout === 'side' ? (ev.clientX - rect.left) / rect.width : (ev.clientY - rect.top) / rect.height;
       setSplit(Math.min(0.85, Math.max(0.15, f)));
@@ -207,152 +335,148 @@ export function App() {
     store('layout', l);
   }
 
-  const issues = loaded?.issues ?? [];
   const errors = issues.filter((i) => i.severity === 'error').length;
   const closeModal = useCallback(() => setModal(undefined), []);
+  const libraryId = doc?.source.kind === 'library' ? doc.source.id : undefined;
 
   return (
     <div className="app">
-      <header className="toolbar">
-        <span className="brand">
-          <span className="brand-dot" /> Lightshow Studio
-        </span>
-
-        <label className="field">
-          <span>Vehicle</span>
-          {/* The closed menu shows the full name; the open list groups versions under each model. */}
-          <span className="select-overlay">
-            <span className="select-face" aria-hidden="true">
-              {vehicle.name}
-            </span>
-          <select
-            aria-label={`Vehicle: ${vehicle.name}`}
-            value={vehicle.id}
-            onChange={(e) => {
-              if (e.target.value === VIN_OPTION) setModal('vin');
-              else chooseVehicle(VEHICLES_BY_ID.get(e.target.value)!);
-            }}
-          >
-            {vehiclesByModel().map((m) => (
-              <optgroup key={m.model} label={m.name}>
-                {m.variants.map((v) => (
-                  <option key={v.id} value={v.id}>
-                    {v.variant}
-                  </option>
-                ))}
-              </optgroup>
-            ))}
-            <optgroup label="Not sure?">
-              <option value={VIN_OPTION}>Look up by VIN…</option>
-            </optgroup>
-          </select>
+      <header className="topbar">
+        <div className="tb-left">
+          <span className="brand" title="Lightshow Studio">
+            <span className="brand-mark" />
+            <span className="brand-name">Lightshow Studio</span>
           </span>
-        </label>
-
-        <label className="field">
-          <span>Show</span>
-          <select
-            value={fileName ? '__file' : showId}
-            onChange={(e) => {
-              if (e.target.value === '__file') return;
-              setFileName(undefined);
-              setShowId(e.target.value);
-            }}
-          >
-            <optgroup label="Tesla examples">
-              {LIBRARY.map((s) => (
-                <option key={s.id} value={s.id}>
-                  {s.title}
-                </option>
-              ))}
-            </optgroup>
-            {fileName && (
-              <optgroup label="Your file">
-                <option value="__file">{fileName}</option>
-              </optgroup>
-            )}
-          </select>
-        </label>
-
-        <div className="segmented" role="group" aria-label="Number of cars">
-          <button className={carMode === 'single' ? 'on' : ''} onClick={() => setCarMode('single')}>
-            Single car
-          </button>
-          <button className={carMode === 'multi' ? 'on' : ''} onClick={() => setCarMode('multi')}>
-            Multiple cars
-          </button>
-        </div>
-
-        <label className="button">
-          Open file…
+          <Menu
+            className="file-menu"
+            title="Open, create or switch shows"
+            label={
+              <>
+                <Library size={15} />
+                <span className="truncate">{doc?.title ?? 'Loading…'}</span>
+              </>
+            }
+            sections={[
+              {
+                items: [
+                  { id: 'new', label: 'New show from a song…', hint: 'Start blank with your own music', icon: <FilePlus2 size={15} />, onSelect: () => songInput.current?.click() },
+                  { id: 'open', label: 'Open a show file…', hint: '.fseq (plus its music) or .zip', icon: <FolderOpen size={15} />, onSelect: () => openInput.current?.click() },
+                ],
+              },
+              {
+                label: 'Tesla example shows',
+                items: LIBRARY.map((s) => ({ id: s.id, label: s.title, hint: s.blurb, checked: s.id === libraryId, onSelect: () => openLibrary(s) })),
+              },
+            ]}
+          />
           <input
+            ref={songInput}
+            type="file"
+            accept=".wav,.mp3,audio/*"
+            hidden
+            onChange={(e) => {
+              const f = e.target.files?.[0];
+              if (f) void newFromSong(f);
+              e.target.value = '';
+            }}
+          />
+          <input
+            ref={openInput}
             type="file"
             multiple
             accept=".fseq,.wav,.mp3,.zip"
+            hidden
             onChange={(e) => {
               if (e.target.files?.length) void openFiles(e.target.files);
               e.target.value = '';
             }}
           />
-        </label>
+        </div>
 
-        <span className="divider" />
+        <div className="tb-center transport">
+          <button className="round" onClick={() => playback.seek(0)} title="Back to start (Home)" aria-label="Back to start">
+            <SkipBack size={16} />
+          </button>
+          <button className="round play" onClick={() => playback.toggle()} disabled={!show} title="Play / pause (Space)" aria-label={playing ? 'Pause' : 'Play'}>
+            {playing ? <Pause size={18} fill="currentColor" /> : <Play size={18} fill="currentColor" />}
+          </button>
+          <span className="time">
+            <span ref={timeRef}>0:00.0</span>
+            <span className="time-total"> / {formatTime(durationMs)}</span>
+          </span>
+        </div>
 
-        <button className="icon" onClick={() => playback.seek(0)} title="Back to start (Home)" aria-label="Back to start">
-          ⏮
-        </button>
-        <button className="play" onClick={() => playback.toggle()} disabled={!loaded} title="Play / pause (Space)">
-          {playing ? '❚❚ Pause' : '▶ Play'}
-        </button>
-        <span className="time">
-          <span ref={timeRef}>0:00.0</span> / {formatTime(durationMs)}
-        </span>
-
-        <span className="spacer" />
-
-        {loaded && (
-          <div className="checks">
-            <button className={`chip ${errors ? 'bad' : issues.length ? 'warn' : 'good'}`} onClick={() => setChecksOpen((o) => !o)}>
-              {errors ? `${errors} error${errors > 1 ? 's' : ''}` : issues.length ? `${issues.length} warning${issues.length > 1 ? 's' : ''}` : '✓ No problems'}
+        <div className="tb-right">
+          <Menu
+            title="Choose your car"
+            align="right"
+            label={
+              <>
+                <Car size={15} />
+                <span className="truncate">{vehicle.name}</span>
+              </>
+            }
+            sections={[
+              ...vehiclesByModel().map((m) => ({
+                label: m.name,
+                items: m.variants.map((v) => ({ id: v.id, label: v.variant, hint: v.hint, checked: v.id === vehicle.id, onSelect: () => chooseVehicle(v) })),
+              })),
+              { items: [{ id: 'vin', label: 'Look up by VIN…', hint: 'Find your exact version', icon: <Search size={15} />, onSelect: () => setModal('vin') }] },
+            ]}
+          />
+          <div className="segmented" role="group" aria-label="Number of cars">
+            <button className={carMode === 'single' ? 'on' : ''} onClick={() => setCarMode('single')} title="Single car">
+              <User size={15} />
             </button>
-            {checksOpen && (
-              <div className="popover" role="dialog" aria-label="Show checks">
-                <p className="popover-title">Checks for this show</p>
-                {issues.length === 0 && <p>No problems found.</p>}
-                <ul>
-                  {issues.map((issue, i) => (
-                    <li key={i} className={`issue ${issue.severity}`}>
-                      <button
-                        className="when"
-                        disabled={issue.timeMs === undefined}
-                        onClick={() => issue.timeMs !== undefined && playback.seek(issue.timeMs)}
-                      >
-                        {issue.timeMs !== undefined ? formatTime(issue.timeMs) : '—'}
-                      </button>
-                      <span>{issue.message}</span>
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            )}
+            <button className={carMode === 'multi' ? 'on' : ''} onClick={() => setCarMode('multi')} title="Multiple cars (coming later)">
+              <Users size={15} />
+            </button>
           </div>
-        )}
-
-        <span className="export-group">
-          <button className="primary" onClick={() => setModal('export')} disabled={!loaded}>
-            ⤓ Export
+          <div className="segmented" role="group" aria-label="Layout">
+            <button className={layout === 'side' ? 'on' : ''} onClick={() => chooseLayout('side')} title="Side by side">
+              <Columns2 size={15} />
+            </button>
+            <button className={layout === 'stack' ? 'on' : ''} onClick={() => chooseLayout('stack')} title="Top and bottom">
+              <Rows2 size={15} />
+            </button>
+          </div>
+          {show && (
+            <div className="checks">
+              <button
+                className={`chip ${errors ? 'bad' : issues.length ? 'warn' : 'good'}`}
+                onClick={() => setChecksOpen((o) => !o)}
+                title="Checks against Tesla's rules"
+              >
+                {errors || issues.length ? <TriangleAlert size={14} /> : <CircleCheck size={14} />}
+                {errors ? `${errors}` : issues.length ? `${issues.length}` : 'OK'}
+              </button>
+              {checksOpen && (
+                <div className="popover" role="dialog" aria-label="Show checks">
+                  <p className="popover-title">Checks against Tesla's rules</p>
+                  {issues.length === 0 && <p className="muted">No problems found.</p>}
+                  <ul>
+                    {issues.map((issue, i) => (
+                      <li key={i} className={`issue ${issue.severity}`}>
+                        <button
+                          className="when"
+                          disabled={issue.timeMs === undefined}
+                          onClick={() => issue.timeMs !== undefined && playback.seek(issue.timeMs)}
+                        >
+                          {issue.timeMs !== undefined ? formatTime(issue.timeMs) : '—'}
+                        </button>
+                        <span>{issue.message}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+            </div>
+          )}
+          <button className="primary export" onClick={() => setModal('export')} disabled={!show}>
+            <Download size={15} /> Export
           </button>
-          <button className="icon help" onClick={() => setModal('help')} title="How to put a show on your Tesla" aria-label="USB drive instructions">
-            ?
-          </button>
-        </span>
-
-        <div className="segmented" role="group" aria-label="Layout">
-          <button className={layout === 'side' ? 'on' : ''} onClick={() => chooseLayout('side')} title="Side by side" aria-label="Side by side">
-            ◧
-          </button>
-          <button className={layout === 'stack' ? 'on' : ''} onClick={() => chooseLayout('stack')} title="Top and bottom" aria-label="Top and bottom">
-            ⬒
+          <button className="icon-only" onClick={() => setModal('help')} title="How to put a show on your Tesla" aria-label="USB drive instructions">
+            <CircleHelp size={17} />
           </button>
         </div>
       </header>
@@ -360,30 +484,39 @@ export function App() {
       <div
         ref={panes}
         className={`panes ${layout}`}
-        style={{ gridTemplate: layout === 'side' ? `1fr / ${split}fr 6px ${1 - split}fr` : `${split}fr 6px ${1 - split}fr / 1fr` }}
+        style={{ gridTemplate: layout === 'side' ? `1fr / ${split}fr 5px ${1 - split}fr` : `${split}fr 5px ${1 - split}fr / 1fr` }}
       >
-        <section className="pane">
+        <section className="pane car-pane">
           <CarView sim={sim} body={vehicle.body} playback={playback} />
           <div className="pane-badge">
-            {vehicle.name} · stylized mockup
-            {libraryShow && libraryShow.cars > 1 && (
-              <span className="pane-badge-note">Car 1 of this {libraryShow.cars}-car show</span>
-            )}
-            {loaded && <span className="pane-badge-title">{loaded.title}</span>}
+            <span className="pane-badge-title">{vehicle.name}</span>
+            <span>Stylized preview</span>
           </div>
         </section>
         <div className="splitter" onPointerDown={startDrag} role="separator" aria-orientation={layout === 'side' ? 'vertical' : 'horizontal'} />
-        <section className="pane">
-          {loaded && sim ? (
-            <Composer
-              show={loaded.show}
-              sim={sim}
-              profile={vehicle}
-              peaks={peaks}
-              playback={playback}
-              range={range}
-              onRangeChange={setRange}
-            />
+        <section className="pane composer">
+          {show && sim && doc ? (
+            <>
+              <ComposerBar
+                editor={editor}
+                onMirror={mirrorSelection}
+                onDelete={() => editor.remove(editor.selection)}
+                onChangeSelected={changeSelected}
+                zoom={(f) => zoomRef.current?.(f)}
+              />
+              <Composer
+                docKey={doc.key}
+                show={show}
+                sim={sim}
+                profile={vehicle}
+                peaks={peaks}
+                playback={playback}
+                editor={editor}
+                range={range}
+                onRangeChange={setRange}
+                zoomRef={zoomRef}
+              />
+            </>
           ) : (
             <p className="pane-message">{error ? '' : 'Loading…'}</p>
           )}
@@ -392,10 +525,12 @@ export function App() {
         {carMode === 'multi' && (
           <div className="overlay">
             <div className="overlay-card">
-              <p className="popover-title">Multiple cars: coming later</p>
+              <p className="overlay-title">
+                <Users size={16} /> Multiple cars: coming later
+              </p>
               <p className="muted">
-                This mode will choreograph several cars parked side by side (Tesla supports synchronized shows across several cars),
-                with sweeps that travel from car to car and one show file per car. For now the editor works on a single car.
+                This mode will choreograph several cars parked side by side (Tesla supports synchronized shows across several cars), with
+                sweeps that travel from car to car and one show file per car. For now the editor works on a single car.
               </p>
               <button className="primary" onClick={() => setCarMode('single')}>
                 Back to single car
@@ -416,7 +551,7 @@ export function App() {
             )}
             {error && (
               <div className="overlay-card error">
-                <p>Couldn't load this show: {error}</p>
+                <p>Couldn't open this show: {error}</p>
                 <button onClick={() => setError(undefined)}>Dismiss</button>
               </div>
             )}
@@ -434,17 +569,17 @@ export function App() {
         />
       )}
       {modal === 'help' && <UsbHelpDialog onClose={closeModal} />}
-      {modal === 'export' && loaded && (
+      {modal === 'export' && doc && show && (
         <ExportDialog
-          defaultName={showFileName(loaded.title)}
+          defaultName={showFileName(doc.title)}
           startMs={range.startMs}
           endMs={range.endMs}
           durationMs={durationMs}
           errors={errors}
-          hasAudio={!!loaded.audio}
+          hasAudio={!!doc.audio}
           format={formatTime}
-          onUsb={(name) => exportUsbZip(name, loaded.show, loaded.audio, range)}
-          onFseq={(name) => exportFseq(name, loaded.show, range)}
+          onUsb={(name) => exportUsbZip(name, show, doc.audio, range)}
+          onFseq={(name) => exportFseq(name, show, range)}
           onResetRange={() => setRange({ startMs: 0, endMs: durationMs })}
           onHelp={() => setModal('help')}
           onClose={closeModal}

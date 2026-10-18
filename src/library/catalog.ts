@@ -19,6 +19,8 @@ export interface LibraryShow {
   id: string;
   title: string;
   credit: string;
+  /** One line about where the show comes from. */
+  blurb: string;
   cars: number;
   /** Approximate download size for one car, shown before loading. */
   downloadMB: number;
@@ -28,6 +30,7 @@ export interface LibraryShow {
 export const LIBRARY: readonly LibraryShow[] = [
   {
     id: 'elevator-music',
+    blurb: 'Short demo from Tesla\'s light show guide',
     title: 'Elevator Music',
     credit: 'Tesla example',
     cars: 1,
@@ -36,6 +39,7 @@ export const LIBRARY: readonly LibraryShow[] = [
   },
   {
     id: 'auld-lang-syne',
+    blurb: 'Tesla example, music by Max Carlisle',
     title: 'Auld Lang Syne in the City',
     credit: 'Max Carlisle · Tesla example',
     cars: 1,
@@ -44,6 +48,7 @@ export const LIBRARY: readonly LibraryShow[] = [
   },
   {
     id: 'the-arrival',
+    blurb: 'Tesla 2023 holiday show, by HVpad (made for 5 cars)',
     title: 'The Arrival',
     credit: 'Tesla example',
     cars: 5,
@@ -52,6 +57,7 @@ export const LIBRARY: readonly LibraryShow[] = [
   },
   {
     id: 'ready-for-assault',
+    blurb: 'Tesla 2024 holiday show (made for 8 cars)',
     title: 'Ready for Assault',
     credit: 'Tesla example',
     cars: 8,
@@ -60,6 +66,7 @@ export const LIBRARY: readonly LibraryShow[] = [
   },
   {
     id: 'cyber-symphony',
+    blurb: 'Tesla 2024 holiday show (made for 4 cars)',
     title: 'Cyber Symphony',
     credit: 'Tesla example',
     cars: 4,
