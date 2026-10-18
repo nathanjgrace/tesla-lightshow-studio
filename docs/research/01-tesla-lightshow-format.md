@@ -137,6 +137,12 @@ Taken from model `StartChannel`s in `xlights_rgbeffects.xml`. **Bold** = present
 
 None of these are checked by Tesla's `validator.py`; it checks only the header. **A closure-aware validator is a real differentiator.**
 
+**Tesla's own examples bend these rules** [verified by running our validator on them]:
+- *Cyber Symphony* sends the charge port **4** counted commands (Open, Dance, Dance, Close) against the documented limit of 3.
+- *The Arrival* and *Ready for Assault* tell the liftgate to dance 5–13 s after Open, sooner than the ≈14 s opening time.
+
+Together with the README's "the limit on number of commands … has been removed", this means the per-closure limits and travel times are **guidance, not hard rules**. Our validator reports them as warnings, not errors. Confirming the real behavior on a car is an open question (§11).
+
 ## 7. Model X: what varies within 2021+ [mostly unverified]
 
 Tesla doesn't use strict model years; build date matters more. Known or suspected differences that affect light shows:
