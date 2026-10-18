@@ -1,33 +1,33 @@
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
+import { showFileName } from '../core/export';
 import { readFseq, type FseqFile } from '../core/fseq';
-import { simulate, type Simulation } from '../core/simulate';
+import { simulate } from '../core/simulate';
 import { formatTime, validate, type Issue } from '../core/validate';
-import { MODEL_X } from '../core/vehicles';
+import { DEFAULT_VEHICLE_ID, VEHICLES_BY_ID, vehiclesByModel, type VehicleProfile } from '../core/vehicles';
 import { DEFAULT_SHOW_ID, LIBRARY, type LibraryShow } from '../library/catalog';
 import { audioType, fromZip, loadLibraryShow, type LoadedFiles } from '../library/load';
 import { computePeaks, type Peaks } from './audio';
 import { CarView } from './CarView';
-import { Composer } from './Composer';
+import { Composer, type Range } from './Composer';
+import { CarPositionHelp, ExportDialog, UsbHelpDialog, VinDialog } from './dialogs';
+import { exportFseq, exportUsbZip } from './exportShow';
 import { Playback } from './playback';
 
 type Layout = 'side' | 'stack';
+type Modal = 'vin' | 'export' | 'help' | undefined;
 
 interface Loaded {
   title: string;
   show: FseqFile;
-  sim: Simulation;
   issues: Issue[];
   audio: Blob | undefined;
 }
 
-const profile = MODEL_X;
-
-function stored<T extends string>(key: string, fallback: T, allowed: readonly T[]): T {
+function stored(key: string): string | null {
   try {
-    const v = localStorage.getItem(key) as T | null;
-    return v && allowed.includes(v) ? v : fallback;
+    return localStorage.getItem(key);
   } catch {
-    return fallback;
+    return null;
   }
 }
 
@@ -35,7 +35,7 @@ function store(key: string, value: string): void {
   try {
     localStorage.setItem(key, value);
   } catch {
-    // Storage can be unavailable (private mode); layout just won't persist.
+    // Storage can be unavailable (private mode); settings just won't persist.
   }
 }
 
@@ -46,6 +46,8 @@ function initialSelection(): { showId: string; car: number } {
   return { showId: show.id, car };
 }
 
+const VIN_OPTION = '__vin';
+
 export function App() {
   const playback = useMemo(() => new Playback(), []);
   // Lets automated browser checks drive playback during development.
@@ -55,36 +57,42 @@ export function App() {
     () => playback.isPlaying,
   );
 
-  const [layout, setLayout] = useState<Layout>(() =>
-    stored('layout', window.innerWidth < 800 ? 'stack' : 'side', ['side', 'stack']),
-  );
-  const [split, setSplit] = useState(() => {
-    try {
-      const v = Number(localStorage.getItem('split'));
-      return v > 0.15 && v < 0.85 ? v : 0.5;
-    } catch {
-      return 0.5;
-    }
+  const [layout, setLayout] = useState<Layout>(() => {
+    const v = stored('layout');
+    return v === 'side' || v === 'stack' ? v : window.innerWidth < 800 ? 'stack' : 'side';
   });
+  const [split, setSplit] = useState(() => {
+    const v = Number(stored('split'));
+    return v > 0.15 && v < 0.85 ? v : 0.5;
+  });
+  const [vehicle, setVehicle] = useState<VehicleProfile>(
+    () => VEHICLES_BY_ID.get(stored('vehicle') ?? '') ?? VEHICLES_BY_ID.get(DEFAULT_VEHICLE_ID)!,
+  );
   const [selection, setSelection] = useState(initialSelection);
   const [fileName, setFileName] = useState<string>();
   const [loaded, setLoaded] = useState<Loaded>();
+  const [range, setRange] = useState<Range>({ startMs: 0, endMs: 0 });
   const [peaks, setPeaks] = useState<Peaks>();
   const [loading, setLoading] = useState<{ label: string; progress?: number }>();
   const [error, setError] = useState<string>();
   const [checksOpen, setChecksOpen] = useState(false);
+  const [modal, setModal] = useState<Modal>();
   const loadToken = useRef(0);
 
   const libraryShow: LibraryShow | undefined = fileName ? undefined : LIBRARY.find((s) => s.id === selection.showId);
+  // Re-simulated when the vehicle changes; the show itself stays loaded.
+  const sim = useMemo(() => (loaded ? simulate(loaded.show, vehicle) : undefined), [loaded, vehicle]);
+  const durationMs = loaded ? loaded.show.frameCount * loaded.show.stepTimeMs : 0;
 
   const present = useCallback(
     async (title: string, files: LoadedFiles, token: number) => {
       const show = readFseq(files.fseq);
-      const sim = simulate(show, profile);
       if (token !== loadToken.current) return;
-      setLoaded({ title, show, sim, issues: validate(show), audio: files.audio });
+      const duration = show.frameCount * show.stepTimeMs;
+      setLoaded({ title, show, issues: validate(show), audio: files.audio });
+      setRange({ startMs: 0, endMs: duration });
       setPeaks(undefined);
-      playback.setSource(files.audio, show.frameCount * show.stepTimeMs);
+      playback.setSource(files.audio, duration);
       setLoading(undefined);
       if (files.audio) {
         computePeaks(files.audio)
@@ -139,17 +147,22 @@ export function App() {
       const url = new URL(location.href);
       url.search = '';
       history.replaceState(null, '', url);
-      await present(name, loadedFiles, token);
+      await present(name.replace(/\.(zip|fseq)$/i, ''), loadedFiles, token);
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     }
+  }
+
+  function chooseVehicle(v: VehicleProfile) {
+    setVehicle(v);
+    store('vehicle', v.id);
   }
 
   // Keyboard: space = play/pause, Home = back to start.
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       const target = e.target as HTMLElement;
-      if (/^(INPUT|SELECT|TEXTAREA|BUTTON)$/.test(target.tagName)) return;
+      if (modal || /^(INPUT|SELECT|TEXTAREA|BUTTON)$/.test(target.tagName)) return;
       if (e.code === 'Space') {
         e.preventDefault();
         playback.toggle();
@@ -157,7 +170,7 @@ export function App() {
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [playback]);
+  }, [playback, modal]);
 
   const timeRef = useRef<HTMLSpanElement>(null);
   useEffect(
@@ -196,7 +209,7 @@ export function App() {
 
   const issues = loaded?.issues ?? [];
   const errors = issues.filter((i) => i.severity === 'error').length;
-  const duration = loaded ? loaded.show.frameCount * loaded.show.stepTimeMs : 0;
+  const closeModal = useCallback(() => setModal(undefined), []);
 
   return (
     <div className="app">
@@ -204,6 +217,37 @@ export function App() {
         <span className="brand">
           <span className="brand-dot" /> Lightshow Studio
         </span>
+
+        <label className="field">
+          <span>Vehicle</span>
+          {/* The closed menu shows the full name; the open list groups versions under each model. */}
+          <span className="select-overlay">
+            <span className="select-face" aria-hidden="true">
+              {vehicle.name}
+            </span>
+          <select
+            aria-label={`Vehicle: ${vehicle.name}`}
+            value={vehicle.id}
+            onChange={(e) => {
+              if (e.target.value === VIN_OPTION) setModal('vin');
+              else chooseVehicle(VEHICLES_BY_ID.get(e.target.value)!);
+            }}
+          >
+            {vehiclesByModel().map((m) => (
+              <optgroup key={m.model} label={m.name}>
+                {m.variants.map((v) => (
+                  <option key={v.id} value={v.id}>
+                    {v.variant}
+                  </option>
+                ))}
+              </optgroup>
+            ))}
+            <optgroup label="Not sure?">
+              <option value={VIN_OPTION}>Look up by VIN…</option>
+            </optgroup>
+          </select>
+          </span>
+        </label>
 
         <label className="field">
           <span>Show</span>
@@ -232,16 +276,20 @@ export function App() {
         </label>
 
         {libraryShow && libraryShow.cars > 1 && (
-          <label className="field">
-            <span>Car</span>
-            <select value={selection.car} onChange={(e) => setSelection({ ...selection, car: Number(e.target.value) })}>
-              {Array.from({ length: libraryShow.cars }, (_, i) => (
-                <option key={i} value={i + 1}>
-                  Car {i + 1}
-                </option>
-              ))}
-            </select>
-          </label>
+          <span className="field">
+            <label className="field">
+              <span>Car position</span>
+              <select value={selection.car} onChange={(e) => setSelection({ ...selection, car: Number(e.target.value) })}>
+                {Array.from({ length: libraryShow.cars }, (_, i) => (
+                  <option key={i} value={i + 1}>
+                    {i + 1} of {libraryShow.cars}
+                    {i === 0 ? ' (leftmost)' : i === libraryShow.cars - 1 ? ' (rightmost)' : ''}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <CarPositionHelp cars={libraryShow.cars} />
+          </span>
         )}
 
         <label className="button">
@@ -266,7 +314,7 @@ export function App() {
           {playing ? '❚❚ Pause' : '▶ Play'}
         </button>
         <span className="time">
-          <span ref={timeRef}>0:00.0</span> / {formatTime(duration)}
+          <span ref={timeRef}>0:00.0</span> / {formatTime(durationMs)}
         </span>
 
         <span className="spacer" />
@@ -299,12 +347,21 @@ export function App() {
           </div>
         )}
 
-        <div className="segmented" role="group" aria-label="Layout">
-          <button className={layout === 'side' ? 'on' : ''} onClick={() => chooseLayout('side')} title="Side by side">
-            ◧ Side by side
+        <span className="export-group">
+          <button className="primary" onClick={() => setModal('export')} disabled={!loaded}>
+            ⤓ Export
           </button>
-          <button className={layout === 'stack' ? 'on' : ''} onClick={() => chooseLayout('stack')} title="Top and bottom">
-            ⬒ Top / bottom
+          <button className="icon help" onClick={() => setModal('help')} title="How to put a show on your Tesla" aria-label="USB drive instructions">
+            ?
+          </button>
+        </span>
+
+        <div className="segmented" role="group" aria-label="Layout">
+          <button className={layout === 'side' ? 'on' : ''} onClick={() => chooseLayout('side')} title="Side by side" aria-label="Side by side">
+            ◧
+          </button>
+          <button className={layout === 'stack' ? 'on' : ''} onClick={() => chooseLayout('stack')} title="Top and bottom" aria-label="Top and bottom">
+            ⬒
           </button>
         </div>
       </header>
@@ -315,16 +372,25 @@ export function App() {
         style={{ gridTemplate: layout === 'side' ? `1fr / ${split}fr 6px ${1 - split}fr` : `${split}fr 6px ${1 - split}fr / 1fr` }}
       >
         <section className="pane">
-          <CarView sim={loaded?.sim} playback={playback} />
+          <CarView sim={sim} playback={playback} />
           <div className="pane-badge">
-            {profile.name} · stylized preview
+            {vehicle.name}
+            {vehicle.model !== 'modelX' && <span className="pane-badge-note">Previewed on a Model X body; its own 3D model is coming</span>}
             {loaded && <span className="pane-badge-title">{loaded.title}</span>}
           </div>
         </section>
         <div className="splitter" onPointerDown={startDrag} role="separator" aria-orientation={layout === 'side' ? 'vertical' : 'horizontal'} />
         <section className="pane">
-          {loaded ? (
-            <Composer show={loaded.show} sim={loaded.sim} profile={profile} peaks={peaks} playback={playback} />
+          {loaded && sim ? (
+            <Composer
+              show={loaded.show}
+              sim={sim}
+              profile={vehicle}
+              peaks={peaks}
+              playback={playback}
+              range={range}
+              onRangeChange={setRange}
+            />
           ) : (
             <p className="pane-message">{error ? '' : 'Loading…'}</p>
           )}
@@ -349,6 +415,33 @@ export function App() {
           </div>
         )}
       </div>
+
+      {modal === 'vin' && (
+        <VinDialog
+          onClose={closeModal}
+          onPick={(v) => {
+            chooseVehicle(v);
+            closeModal();
+          }}
+        />
+      )}
+      {modal === 'help' && <UsbHelpDialog onClose={closeModal} />}
+      {modal === 'export' && loaded && (
+        <ExportDialog
+          defaultName={showFileName(loaded.title)}
+          startMs={range.startMs}
+          endMs={range.endMs}
+          durationMs={durationMs}
+          errors={errors}
+          hasAudio={!!loaded.audio}
+          format={formatTime}
+          onUsb={(name) => exportUsbZip(name, loaded.show, loaded.audio, range)}
+          onFseq={(name) => exportFseq(name, loaded.show, range)}
+          onResetRange={() => setRange({ startMs: 0, endMs: durationMs })}
+          onHelp={() => setModal('help')}
+          onClose={closeModal}
+        />
+      )}
     </div>
   );
 }

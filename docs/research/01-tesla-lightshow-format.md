@@ -194,3 +194,23 @@ Tesla doesn't use strict model years; build date matters more. Known or suspecte
 - [vpic-api (NHTSA vPIC wrapper)](https://pypi.org/project/vpic-api/0.4.0)
 - [Tesla Fleet API: What is Fleet API?](https://developer.tesla.com/docs/fleet-api/getting-started/what-is-fleet-api)
 - npm registry: essentia.js, meyda, web-audio-beat-detector (license fields)
+
+## 12. Vehicle versions in the app (added 2026-10-18)
+
+Profiles live in `src/core/vehicles.ts`. What each is based on:
+
+| Version | Basis | Confidence |
+|---|---|---|
+| Model S 2021+ | README tables; aux park + side markers combined per side; door handles | **[doc]** |
+| Model 3 2017 – Oct 2020 | README: tails and license plate operate together, license channel ignored | **[doc]** |
+| Model 3 Oct 2020 – 2023 | README Model 3/Y rules (ch 4–6 one light per side; all aux park + side markers combined); no fogs/aux park on Standard Range Plus | **[doc]** |
+| Model 3 2024+ | Same rules plus interior accent lights; fog lights unconfirmed | **[unverified]** |
+| Model X 2021 – 2024 | README tables | **[doc]** |
+| Model X 2025+ | As 2021, plus accent RGB lights (reported ambient lighting) | **[unverified]** |
+| Model Y 2020 – 2024 | README Model 3/Y rules; liftgate only with power liftgate | **[doc]** |
+| Model Y 2025+ | Released after Tesla's last README update (Dec 2024); front light bar mapping unknown | **[unverified]** |
+| Cybertruck 2024+ | README remapping (reverse via tails, bed lights via reverse, frunk via liftgate, frunk light via aux park, rear turn disabled), light bars | **[doc]** |
+
+VIN decoding (`src/core/vin.ts`) uses the standard VIN layout: position 4 is Tesla's model letter (S, 3, X, Y, C), 9 the check digit, 10 the model year, 11 the plant. It runs locally. Model years that span two versions (Model 3 2020, Model Y 2025) show both with a distinguishing hint. Region and options (side markers, rear fogs, Standard Range Plus, power liftgate) can't be read from the VIN; the composer marks those rows with *.
+
+**Show length:** Tesla's current documentation has no 90-second or 5-minute limit; the maximum is 4 hours (§2). Older guides online mention shorter limits from earlier software.

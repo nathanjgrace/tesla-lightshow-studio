@@ -130,10 +130,13 @@ audio ──▶ analysis (Worker) ──▶ choreograph(style, profile) ──�
 
 ## 8. Export
 
-`LightShow/lightshow.fseq` plus `LightShow/lightshow.wav`, delivered as a zip with step-by-step USB instructions:
-- Audio is resampled to 44.1 kHz WAV (48 kHz drifts).
-- The validator runs before download, and errors block export unless overridden.
-- File names must match; we let users name the show and support multiple shows per drive.
+`LightShow/<name>.fseq` plus `LightShow/<name>.wav`, delivered as a zip, with Tesla's USB instructions one click away (the **?** next to Export). Implemented in `src/core/export.ts`, ✅ first pass.
+- **Export range:** the user picks which part of the song becomes the show by dragging handles above the waveform, and can slide the whole range along the song. Editing is never limited to the range; only the export is trimmed. Tesla's current limit is 4 hours per show (research §2), so there is no hard length cap.
+- Audio is resampled to 44.1 kHz, 16-bit WAV (48 kHz drifts).
+- Validator errors are shown in the export dialog (not yet blocking).
+- File names must match; the user names the show, and names are made file-safe so several shows can share a drive.
+- **Export any time:** "Show file only (.fseq)" saves progress whenever the user wants, finished or not; the app reopens `.fseq` files.
+- **Later, a project file.** Once effects are editable (M2), a `.fseq` can't hold the editable effects, layers and settings (it only stores the rendered frames). We'll add a project file then (a zip with project JSON + audio, e.g. `.lsproj`) plus automatic in-browser saving. `.fseq` stays the hand-off format for the car.
 
 ## 9. Roadmap
 
@@ -143,9 +146,11 @@ audio ──▶ analysis (Worker) ──▶ choreograph(style, profile) ──�
 | **M1 Playback** | Editor layout (side-by-side / stacked), 3D Model X with working closures, composer timeline with waveform, Tesla example library, audio-synced playback | ✅ first pass |
 | **M2 Editor basics** | Project model, compile, timeline, place/move effects, export zip | next |
 | **M3 Auto-generate v1** | essentia.js analysis, beat-driven lights, style presets, closure planner | |
-| **M4 Vehicle profiles** | Model X variants, VIN decode, questionnaire, simulate OR/kind quirks | |
+| **M4 Vehicle profiles** | All models and versions in a grouped menu, local VIN decoding with version picker, combined-light (OR) and ramp quirks in the simulation | ✅ first pass |
 | **M5 Expert parity** | Layers, value curves, timing tracks, `.xsq` import, shortcuts | |
-| **M6 More cars** | Model S, 3, Y, Cybertruck (light bars, RGB) | |
+| **M6 More cars** | 3D bodies for Model S, 3, Y, Cybertruck (light bars, RGB); per-variant lights in the preview | |
+| **M6a HQ assets** | Licensed or commissioned high-quality 3D models (glTF) per model and version, replacing the code-built bodies; light/closure wiring stays the same | later |
+| **M6b Paint** | Factory paint colors per model and year, plus a Tesla-style custom picker with finish (gloss/matte/metallic) | later, low priority |
 | **M7 Community** | Accounts, cloud projects, share/browse shows, multi-car shows | |
 
 ## 10. Technology choices

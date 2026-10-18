@@ -362,6 +362,7 @@ button:disabled {
 }
 
 .legend i {
+  flex: none;
   display: inline-block;
   width: 10px;
   height: 10px;
@@ -372,6 +373,9 @@ button:disabled {
 
 .legend-note {
   margin-left: 10px;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .composer-canvas {
@@ -432,4 +436,242 @@ button:disabled {
   .car-hint {
     display: none;
   }
+}
+
+/* Buttons */
+
+button.primary {
+  background: var(--accent);
+  border-color: var(--accent);
+  font-weight: 600;
+}
+
+button.primary:hover:not(:disabled) {
+  background: #ff3a40;
+  border-color: #ff3a40;
+}
+
+button.link {
+  padding: 0;
+  border: none;
+  background: none;
+  color: #7aa7ff;
+  text-decoration: underline;
+}
+
+button.help {
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  border-radius: 50%;
+  font-weight: 700;
+}
+
+.export-group {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.help-wrap {
+  position: relative;
+  margin-left: 4px;
+}
+
+.popover.narrow {
+  left: 0;
+  right: auto;
+  width: min(320px, calc(100vw - 32px));
+  line-height: 1.45;
+}
+
+.camera-presets button.on {
+  background: #2a3039;
+  border-color: #3a404a;
+}
+
+.preset-gap {
+  width: 8px;
+}
+
+.pane-badge-note {
+  color: var(--warn);
+  font-size: 11px;
+}
+
+/* Text */
+
+.muted {
+  color: var(--muted);
+}
+
+.small {
+  font-size: 12px;
+}
+
+.error-text {
+  color: var(--bad);
+}
+
+.warn-text {
+  color: var(--warn);
+}
+
+/* Modal dialogs */
+
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  display: grid;
+  place-items: center;
+  padding: 16px;
+  background: rgb(0 0 0 / 0.6);
+}
+
+.modal {
+  width: min(480px, 100%);
+  max-height: calc(100vh - 32px);
+  display: flex;
+  flex-direction: column;
+  background: var(--panel-2);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  box-shadow: 0 20px 50px rgb(0 0 0 / 0.6);
+}
+
+.modal.wide {
+  width: min(680px, 100%);
+}
+
+.modal-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 16px 8px;
+}
+
+.modal-head h2 {
+  margin: 0;
+  font-size: 16px;
+}
+
+.modal-body {
+  padding: 0 16px 16px;
+  overflow: auto;
+  line-height: 1.5;
+}
+
+.modal-body h3 {
+  margin: 18px 0 6px;
+  font-size: 14px;
+}
+
+.modal-body ul,
+.modal-body ol {
+  padding-left: 20px;
+}
+
+.modal-body li {
+  margin-bottom: 4px;
+}
+
+.modal-body code {
+  padding: 1px 4px;
+  border-radius: 4px;
+  background: #0d0f12;
+}
+
+.modal-body a {
+  color: #7aa7ff;
+}
+
+.modal-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin: 14px 0 6px;
+}
+
+input {
+  font: inherit;
+  color: var(--fg);
+  background: #0d0f12;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 7px 10px;
+}
+
+.stacked {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-bottom: 8px;
+}
+
+.vin-form {
+  display: flex;
+  gap: 8px;
+}
+
+.vin-form input {
+  flex: 1;
+  min-width: 0;
+  font-family: ui-monospace, monospace;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.choices {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.choice {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  padding: 10px 12px;
+  text-align: left;
+}
+
+/* A native select with a custom face, so the closed menu can show more than the option text. */
+.select-overlay {
+  position: relative;
+  display: inline-flex;
+}
+
+.select-face {
+  padding: 5px 28px 5px 10px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--panel-2);
+  color: var(--fg);
+  white-space: nowrap;
+}
+
+.select-face::after {
+  content: '▾';
+  position: absolute;
+  right: 10px;
+  color: var(--muted);
+}
+
+.select-overlay select {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  cursor: pointer;
+}
+
+.select-overlay:hover .select-face {
+  border-color: #3a404a;
+}
+
+.select-overlay:focus-within .select-face {
+  outline: 2px solid #5b8def;
+  outline-offset: 1px;
 }

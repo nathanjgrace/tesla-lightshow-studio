@@ -84,6 +84,16 @@ export function simulate(show: FseqFile, vehicle: VehicleProfile): Simulation {
     levels.set(pc.id, out);
   }
 
+  // Lights driven by several channels show the combined (OR) state.
+  for (const group of vehicle.orGroups) {
+    const inputs = group.inputs.map((id) => levels.get(id)).filter((l): l is Float32Array => !!l);
+    const combined = new Float32Array(frameCount);
+    for (const input of inputs) {
+      for (let f = 0; f < frameCount; f++) if (input[f]! > combined[f]!) combined[f] = input[f]!;
+    }
+    for (const id of group.outputs) levels.set(id, combined);
+  }
+
   return { frameCount, stepTimeMs, levels, closures };
 }
 

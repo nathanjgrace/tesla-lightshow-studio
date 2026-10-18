@@ -183,6 +183,27 @@ interface Closure {
   apply: (position: number, dancing: boolean, timeS: number) => void;
 }
 
+/**
+ * Matte keeps the body from mirroring the virtual studio lights, which can be
+ * mistaken for light show effects; glossy looks closer to real paint.
+ */
+export type Finish = 'matte' | 'glossy';
+
+const FINISHES: Record<Finish, { environment: number; paint: Partial<THREE.MeshPhysicalMaterialParameters>; glass: Partial<THREE.MeshPhysicalMaterialParameters>; trim: Partial<THREE.MeshStandardMaterialParameters> }> = {
+  matte: {
+    environment: 0.06,
+    paint: { metalness: 0.02, roughness: 0.68, clearcoat: 0 },
+    glass: { metalness: 0, roughness: 0.5, clearcoat: 0 },
+    trim: { metalness: 0.05, roughness: 0.7 },
+  },
+  glossy: {
+    environment: 0.3,
+    paint: { metalness: 0.15, roughness: 0.32, clearcoat: 1, clearcoatRoughness: 0.08 },
+    glass: { metalness: 0.4, roughness: 0.04, clearcoat: 1 },
+    trim: { metalness: 0.5, roughness: 0.25 },
+  },
+};
+
 export interface CameraPreset {
   name: string;
   /** Direction from the car's center toward the camera. */
@@ -345,6 +366,17 @@ export class ModelXScene {
     if (!this.sim) return;
     this.frame = Math.min(this.sim.frameCount - 1, Math.max(0, Math.floor(timeMs / this.sim.stepTimeMs)));
     this.applyFrame(timeMs / 1000);
+  }
+
+  setFinish(finish: Finish): void {
+    const f = FINISHES[finish];
+    this.scene.environmentIntensity = f.environment;
+    this.paint.setValues(f.paint);
+    this.glass.setValues(f.glass);
+    this.sideGlass.setValues({ metalness: f.glass.metalness ?? 0, roughness: f.glass.roughness ?? 0.5 });
+    this.trim.setValues(f.trim);
+    // Turning clearcoat on or off changes the shader.
+    for (const m of [this.paint, this.glass, this.sideGlass, this.trim]) m.needsUpdate = true;
   }
 
   flyTo(preset: CameraPreset): void {

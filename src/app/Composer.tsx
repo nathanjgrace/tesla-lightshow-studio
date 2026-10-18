@@ -28,6 +28,8 @@ const C = {
   group: '#8b93a0',
   wave: '#5b8def',
   playhead: '#ff3b3b',
+  range: 'rgba(232, 33, 39, 0.28)',
+  rangeEdge: '#ff6a5f',
   white: '#ffe7b0',
   amber: '#ffa21a',
   red: '#ff4a4a',
@@ -51,7 +53,7 @@ const GROUP_LABELS: Record<ChannelGroup, string> = {
 
 type Row =
   | { type: 'group'; label: string }
-  | { type: 'light'; label: string; id: string; color: string; note?: string }
+  | { type: 'light'; label: string; ids: string[]; color: string; note?: string }
   | { type: 'closure'; label: string; id: string }
   | { type: 'rgb'; label: string; ids: [string, string, string]; note?: string };
 
@@ -63,13 +65,31 @@ function lightColor(id: string, group: ChannelGroup): string {
 
 export function buildRows(profile: VehicleProfile): Row[] {
   const rows: Row[] = [];
+  const merged = new Map<string, Extract<Row, { type: 'light' }>>();
   let group: ChannelGroup | undefined;
   for (const pc of profile.channels) {
     if (pc.group !== group) {
       group = pc.group;
       rows.push({ type: 'group', label: GROUP_LABELS[group] });
     }
-    const name = CHANNELS_BY_ID.get(pc.id)!.name;
+    const name = pc.label ?? CHANNELS_BY_ID.get(pc.id)!.name;
+    // Light bars: many LEDs, one row showing the brightest.
+    if (pc.row) {
+      const existing = merged.get(pc.row.key);
+      if (existing) existing.ids.push(pc.id);
+      else {
+        const row: Extract<Row, { type: 'light' }> = {
+          type: 'light',
+          label: pc.row.label,
+          ids: [pc.id],
+          color: C.white,
+          ...(pc.maybe ? { note: pc.maybe } : {}),
+        };
+        merged.set(pc.row.key, row);
+        rows.push(row);
+      }
+      continue;
+    }
     if (pc.kind === 'closure') {
       rows.push({ type: 'closure', label: name, id: pc.id });
     } else if (pc.kind === 'rgb') {
@@ -82,10 +102,18 @@ export function buildRows(profile: VehicleProfile): Row[] {
         ...(pc.maybe ? { note: pc.maybe } : {}),
       });
     } else {
-      rows.push({ type: 'light', label: name, id: pc.id, color: lightColor(pc.id, pc.group), ...(pc.maybe ? { note: pc.maybe } : {}) });
+      rows.push({ type: 'light', label: name, ids: [pc.id], color: lightColor(pc.id, pc.group), ...(pc.maybe ? { note: pc.maybe } : {}) });
     }
   }
   return rows;
+}
+
+/** Shortens text with an ellipsis so it fits in maxWidth pixels. */
+function fitText(ctx: CanvasRenderingContext2D, text: string, maxWidth: number): string {
+  if (ctx.measureText(text).width <= maxWidth) return text;
+  let t = text;
+  while (t.length > 1 && ctx.measureText(`${t}…`).width > maxWidth) t = t.slice(0, -1);
+  return `${t.trimEnd()}…`;
 }
 
 const rowHeight = (r: Row) => (r.type === 'group' ? GROUP_H : ROW_H);
@@ -96,15 +124,31 @@ interface View {
   scrollY: number;
 }
 
+export interface Range {
+  startMs: number;
+  endMs: number;
+}
+
 interface Props {
   show: FseqFile;
   sim: Simulation;
   profile: VehicleProfile;
   peaks: Peaks | undefined;
   playback: Playback;
+  /** The part of the song that gets exported. */
+  range: Range;
+  onRangeChange: (range: Range) => void;
 }
 
-export function Composer({ show, sim, profile, peaks, playback }: Props) {
+export function Composer({ show, sim, profile, peaks, playback, range, onRangeChange }: Props) {
+  // Held in refs so dragging the range redraws without rebuilding the canvas.
+  const rangeRef = useRef(range);
+  rangeRef.current = range;
+  const onRangeRef = useRef(onRangeChange);
+  onRangeRef.current = onRangeChange;
+  const drawRangeRef = useRef<() => void>(() => {});
+  useEffect(() => drawRangeRef.current(), [range]);
+
   const host = useRef<HTMLDivElement>(null);
   const canvas = useRef<HTMLCanvasElement>(null);
   const view = useRef<View>({ startMs: 0, pxPerSec: 40, scrollY: 0 });
@@ -182,7 +226,7 @@ export function Composer({ show, sim, profile, peaks, playback }: Props) {
         sctx.fillRect(LABEL_W, y, width - LABEL_W, h);
 
         if (row.type === 'light' || row.type === 'rgb') {
-          const tracks = row.type === 'light' ? [sim.levels.get(row.id)] : row.ids.map((id) => sim.levels.get(id));
+          const tracks = row.ids.map((id) => sim.levels.get(id));
           for (let x = LABEL_W; x < width; x++) {
             const a = frameOf(msOf(x));
             const b = Math.max(a + 1, frameOf(msOf(x) + msPerPx));
@@ -192,7 +236,7 @@ export function Composer({ show, sim, profile, peaks, playback }: Props) {
               if (!track) return;
               for (let f = a; f < b && f < sim.frameCount; f++) {
                 const l = track[f]!;
-                if (l > rgb[ti]!) rgb[ti] = l;
+                if (ti < 3 && l > rgb[ti]!) rgb[ti] = l;
                 if (l > peak) peak = l;
               }
             });
@@ -273,7 +317,7 @@ export function Composer({ show, sim, profile, peaks, playback }: Props) {
         } else {
           const note = 'note' in row ? row.note : undefined;
           sctx.fillStyle = note ? C.labelDim : C.label;
-          sctx.fillText(row.label + (note ? ' *' : ''), 14, y + 13);
+          sctx.fillText(fitText(sctx, row.label + (note ? ' *' : ''), LABEL_W - 20), 14, y + 13);
         }
         y += h;
       }
@@ -329,6 +373,29 @@ export function Composer({ show, sim, profile, peaks, playback }: Props) {
       ctx.setTransform(1, 0, 0, 1, 0, 0);
       ctx.drawImage(staticLayer, 0, 0);
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+
+      // Export range: dim what's outside it, mark it on the ruler with handles.
+      const { startMs, endMs } = rangeRef.current;
+      const xa = Math.max(LABEL_W, xOf(startMs));
+      const xb = Math.min(width, xOf(endMs));
+      ctx.fillStyle = 'rgba(5, 6, 8, 0.6)';
+      if (xa > LABEL_W) ctx.fillRect(LABEL_W, RULER_H, xa - LABEL_W, height - RULER_H);
+      if (xb < width) ctx.fillRect(xb, RULER_H, width - xb, height - RULER_H);
+      if (xb > xa) {
+        ctx.fillStyle = C.range;
+        ctx.fillRect(xa, 0, xb - xa, RULER_H);
+        ctx.fillStyle = '#fff';
+        ctx.font = '600 10px system-ui, sans-serif';
+        if (xb - xa > 120) ctx.fillText(`Export ${formatTime(endMs - startMs)}`, xa + 8, 15);
+      }
+      ctx.fillStyle = C.rangeEdge;
+      for (const ms of [startMs, endMs]) {
+        const hx = xOf(ms);
+        if (hx < LABEL_W - 4 || hx > width + 4) continue;
+        ctx.fillRect(hx - 2, 0, 4, HEADER_H);
+        ctx.fillRect(hx - 5, 4, 10, 14);
+      }
+
       const x = xOf(playheadMs);
       if (x >= LABEL_W && x <= width) {
         ctx.fillStyle = C.playhead;
@@ -399,21 +466,55 @@ export function Composer({ show, sim, profile, peaks, playback }: Props) {
       full();
     }
 
-    let scrubbing = false;
-    function seekTo(e: PointerEvent) {
+    // Pointer: drag the export range's edges (ruler and waveform) or the
+    // range itself (ruler); anywhere else seeks.
+    type Drag = { kind: 'seek' } | { kind: 'start' | 'end' } | { kind: 'move'; grabMs: number; startMs: number; endMs: number };
+    let drag: Drag | undefined;
+    const MIN_RANGE_MS = 1000;
+    function hit(e: PointerEvent): Drag['kind'] | undefined {
       const rect = cv.getBoundingClientRect();
       const x = e.clientX - rect.left;
-      if (x >= LABEL_W) playback.seek(msOf(x));
+      const y = e.clientY - rect.top;
+      if (x < LABEL_W) return undefined;
+      const { startMs, endMs } = rangeRef.current;
+      if (y < HEADER_H) {
+        if (Math.abs(x - xOf(startMs)) <= 7) return 'start';
+        if (Math.abs(x - xOf(endMs)) <= 7) return 'end';
+        if (y < RULER_H && x > xOf(startMs) && x < xOf(endMs)) return 'move';
+      }
+      return 'seek';
+    }
+    function pointerMs(e: PointerEvent) {
+      return msOf(e.clientX - cv.getBoundingClientRect().left);
+    }
+    function apply(e: PointerEvent) {
+      if (!drag) return;
+      const t = Math.max(0, Math.min(durationMs, pointerMs(e)));
+      const r = rangeRef.current;
+      if (drag.kind === 'seek') playback.seek(t);
+      else if (drag.kind === 'start') onRangeRef.current({ startMs: Math.min(t, r.endMs - MIN_RANGE_MS), endMs: r.endMs });
+      else if (drag.kind === 'end') onRangeRef.current({ startMs: r.startMs, endMs: Math.max(t, r.startMs + MIN_RANGE_MS) });
+      else if (drag.kind === 'move') {
+        const length = drag.endMs - drag.startMs;
+        const start = Math.max(0, Math.min(durationMs - length, drag.startMs + t - drag.grabMs));
+        onRangeRef.current({ startMs: start, endMs: start + length });
+      }
     }
     function onDown(e: PointerEvent) {
-      const rect = cv.getBoundingClientRect();
-      if (e.clientX - rect.left < LABEL_W) return;
-      scrubbing = true;
+      const kind = hit(e);
+      if (!kind) return;
+      const r = rangeRef.current;
+      drag = kind === 'move' ? { kind, grabMs: pointerMs(e), ...r } : { kind };
       cv.setPointerCapture(e.pointerId);
-      seekTo(e);
+      if (kind !== 'move') apply(e);
     }
-    const onMove = (e: PointerEvent) => scrubbing && seekTo(e);
-    const onUp = () => (scrubbing = false);
+    function onMove(e: PointerEvent) {
+      if (drag) return apply(e);
+      const kind = hit(e);
+      cv.style.cursor = kind === 'start' || kind === 'end' ? 'ew-resize' : kind === 'move' ? 'grab' : 'default';
+    }
+    const onUp = () => (drag = undefined);
+    drawRangeRef.current = drawFrame;
 
     cv.addEventListener('wheel', onWheel, { passive: false });
     cv.addEventListener('pointerdown', onDown);
@@ -455,7 +556,7 @@ export function Composer({ show, sim, profile, peaks, playback }: Props) {
           Close
           <i style={{ background: CLOSURE_COLORS.stop }} />
           Stop
-          <span className="legend-note">white line = how open · * = not on every car</span>
+          <span className="legend-note">white line = how open · * = not on every car · red handles = exported part</span>
         </span>
         <span className="spacer" />
         <button onClick={() => zoom(1 / 1.5)} title="Zoom out">−</button>
