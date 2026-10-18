@@ -2,9 +2,11 @@
 
 Web app for creating Tesla light shows (`.fseq` + audio on a USB drive). Plan: `docs/DESIGN.md`. Format facts and their sources: `docs/research/`.
 
-## Working with the owner
+## Collaboration
 
-The owner is new to software development. Explain steps in plain language, spell out commands and where to run them, and don't assume familiarity with git, npm, terminals or GitHub. Prefer doing things for them over asking them to do it.
+- Handle tooling (git, npm, GitHub settings, deploys) directly where possible rather than handing off steps.
+- When a manual step is needed, give complete click-by-click instructions, including where to find each setting.
+- Summaries should say what changed in plain language, not just list files.
 
 ## Code
 

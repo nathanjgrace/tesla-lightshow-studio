@@ -2,6 +2,8 @@
 
 A web app for creating custom Tesla light shows: one click to auto-generate a show from any song, and full frame-by-frame control when you want it.
 
+> **Try it:** <https://nathanjgrace.github.io/tesla-lightshow-studio/>
+>
 > **Status:** early development. Right now the app can open a `.fseq` light show file and check it for problems. See [docs/DESIGN.md](docs/DESIGN.md) for the plan.
 
 ## Running it on your own computer
