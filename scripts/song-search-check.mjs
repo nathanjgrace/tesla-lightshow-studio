@@ -88,6 +88,8 @@ for (const [engineName, engine] of [['Chromium', chromium], ['WebKit', webkit]])
   const browser = await engine.launch();
   const page = await browser.newPage();
   page.on('pageerror', (e) => check(false, `page error: ${e.message}`));
+  page.on('requestfailed', (r) => /deezer|dzcdn/.test(r.url()) && log(`request failed: ${r.url().slice(0, 160)} ${r.failure()?.errorText}`, true));
+  page.on('response', (r) => /deezer|dzcdn/.test(r.url()) && log(`response ${r.status()} ${r.url().slice(0, 160)}`, r.status() >= 400));
   await page.goto(SITE);
   await page.waitForSelector('.topbar');
   await page.keyboard.press('Control+k');
@@ -100,7 +102,7 @@ for (const [engineName, engine] of [['Chromium', chromium], ['WebKit', webkit]])
     .waitForSelector('[role="dialog"]', { state: 'detached', timeout: 30000 })
     .then(() => true, () => false);
   check(closed, 'starts a show from the clip');
-  if (!closed) log(`dialog says: ${(await page.textContent('[role="dialog"]'))?.slice(0, 300)}`, true);
+  if (!closed) log(`error shown: ${(await page.textContent('.song-file-error').catch(() => null)) ?? '(none)'}`, true);
   const transport = (await page.textContent('.transport')) ?? '';
   check(/\/\s*0:(29|30)\.\d/.test(transport), `show is about 30 s long (“${transport.trim()}”)`);
   check((await page.textContent('.file-menu .menu-trigger'))?.includes('30 s clip') ?? false, 'top bar marks it as a clip');
