@@ -150,8 +150,12 @@ export async function previewClip(song: SongResult, signal?: AbortSignal): Promi
   if (song.source === 'deezer') {
     url = song.previewUrl;
   } else {
-    const json = await jsonpOrFailure((callback) => deezerSearchUrl(deezerTrackQuery(song), { limit: 10, callback }), signal);
-    url = sameSong(parseDeezerResults(json), song)?.previewUrl;
+    // Deezer's field search first, then a plain search of artist and title.
+    for (const q of [deezerTrackQuery(song), `${song.artist} ${song.title}`]) {
+      const json = await jsonpOrFailure((callback) => deezerSearchUrl(q, { limit: 15, callback }), signal);
+      url = sameSong(parseDeezerResults(json), song)?.previewUrl;
+      if (url) break;
+    }
     if (!url) throw new Error(`Couldn't find a downloadable preview of “${song.title}”. Try another version of the song, or use your own copy.`);
   }
   let response: Response;
