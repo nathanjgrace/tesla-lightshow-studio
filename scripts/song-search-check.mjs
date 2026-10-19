@@ -33,13 +33,13 @@ const scenarios = [
 
 let failed = 0;
 let section = '';
-const log = (message) => {
+// On GitHub, problems also become annotations, so they can be read through the API.
+const log = (message, problem = false) => {
   console.log(message);
-  // On GitHub, also as an annotation, so results can be read through the API.
-  if (process.env.GITHUB_ACTIONS) console.log(`::notice title=${section}::${message.replace(/\n/g, ' ')}`);
+  if (problem && process.env.GITHUB_ACTIONS) console.log(`::error title=${section}::${message.replace(/\n/g, ' ')}`);
 };
 const check = (ok, message) => {
-  log(`${ok ? '✓' : '✗'} ${message}`);
+  log(`${ok ? '✓' : '✗'} ${message}`, !ok);
   if (!ok) failed++;
 };
 
@@ -100,7 +100,7 @@ for (const [engineName, engine] of [['Chromium', chromium], ['WebKit', webkit]])
     .waitForSelector('[role="dialog"]', { state: 'detached', timeout: 30000 })
     .then(() => true, () => false);
   check(closed, 'starts a show from the clip');
-  if (!closed) log(`dialog says: ${(await page.textContent('[role="dialog"]'))?.slice(0, 300)}`);
+  if (!closed) log(`dialog says: ${(await page.textContent('[role="dialog"]'))?.slice(0, 300)}`, true);
   const transport = (await page.textContent('.transport')) ?? '';
   check(/\/\s*0:(29|30)\.\d/.test(transport), `show is about 30 s long (“${transport.trim()}”)`);
   check((await page.textContent('.file-menu .menu-trigger'))?.includes('30 s clip') ?? false, 'top bar marks it as a clip');
