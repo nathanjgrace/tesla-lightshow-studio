@@ -1,0 +1,96 @@
+← Dashboard
+Save
+⬇ Export ZIP · Free
+FREE
+TESLA MODEL
+Model 3
+Model Y
+Model S
+Model X
+Cybertruck
+YOUR SONG
+Hear 30 seconds and watch your car light up to it. No file needed.
+Blinding Lights (Remix)
+The Weeknd & ROSALÍA · Blinding Lights (Remix) - Single
+Blinding Lights
+Teddy Swims · Blinding Lights - Single
+Blinding Lights
+KIDZ BOP Kids · KIDZ BOP 2021
+Blinding Lights (Country Version)
+Tebey · Blinding Lights (Country Version) - Single
+Blinding Lights
+All Time Low · Blinding Lights - Single
+Blinding Lights
+The Weeknd · After Hours
+Blinding Lights
+X Ambassadors · Blinding Lights - Single
+Blinding Lights
+The Weeknd · After Hours (Deluxe)
+THEN, TO EXPORT THE FULL SHOW
+🎵
+Drop in your own copy of the song
+MP3, WAV, M4A… · the full song, ready to export
+🔒 Your song is deleted from our servers after you export. A copy stays in this browser, on your device, so you can reopen the show.
+BPM
+120
+60
+200
+INTENSITY
+80%
+10%
+100%
+HD MODEL
+drag · scroll · hover lights
+MODEL
+Model 3
+BPM
+120
+INTENSITY
+80%
+CHANNELS
+200
+AUDIO
+None
+Light Channel Timeline
+✎ Edit
+46 channels
+▾
+FRONT LIGHTS
+▾
+REAR LIGHTS
+▾
+MARKERS
+▾
+CLOSURES
+L Mirror
+R Mirror
+L Front Window
+L Rear Window
+R Front Window
+R Rear Window
+Charge Port
+0.0s
+2.0s
+4.0s
+6.0s
+8.0s
+|─ 4 beats ──|
+120 BPM · 16 beats
+CLOSURES
+O
+Open
+C
+Close
+D
+Dance
+S
+Stop
+In the Closures rows of the timeline, click a beat cell to cycle its command: Open and Close actuate the panel, Dance wiggles it open & shut, and Stop halts it mid-motion. Click again past Stop to clear. Dimmed cells are auto-choreographed for you; click any cell to override it.
+Auto-choreograph closures to the music: on by default, opening your car's falcon/front doors to land open on the drops and dance through big sections, automatically within Tesla's limits. Uncheck to keep your show lights-only.
+⚠ Real doors/closures will move, so make sure your Tesla has clearance. Your Tesla will also ask you to confirm on its screen before the show runs.
+How to use on your Tesla
+Click Export ZIP to download the LightShow package. We email you the same link either way.
+Copy the LightShow/ folder to the root of a USB drive (exFAT or FAT32, not NTFS). This step needs a computer.
+Plug the USB into your Tesla's front USB or glovebox port.
+Tap Toybox → Light Show → Schedule Show on the touchscreen. Start it there, not from the phone app: owners of 2025+ Model Ys report the app can skip the front lights.
+Full step-by-step guide, incl. how to format a USB drive →

@@ -1,0 +1,15 @@
+INPUT type=text ph= aria=null txt=
+BUTTON type=submit ph=undefined aria=null txt=Save
+BUTTON type=submit ph=undefined aria=null txt=⬇ Export ZIP · Free
+BUTTON type=submit ph=undefined aria=Menu txt=
+BUTTON type=submit ph=undefined aria=null txt=Model 3
+BUTTON type=submit ph=undefined aria=null txt=Model Y
+BUTTON type=submit ph=undefined aria=null txt=Model S
+BUTTON type=submit ph=undefined aria=null txt=Model X
+BUTTON type=submit ph=undefined aria=null txt=Cybertruck
+INPUT type=text ph=Type any song name… aria=Search for a song txt=
+INPUT type=file ph= aria=null txt=
+INPUT type=range ph= aria=Tempo (BPM) txt=
+INPUT type=range ph= aria=Light intensity percent txt=
+BUTTON type=submit ph=undefined aria=null txt=✎ Edit
+INPUT type=checkbox ph= aria=null txt=
