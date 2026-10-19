@@ -184,6 +184,16 @@ Tesla publishes 3D models only for the Model S and Cybertruck (in its xLights pr
 
 The editor works on one car. A **Single car / Multiple cars** switch is in the toolbar; Multiple cars shows a placeholder for now. Tesla's multi-car example shows play their first car's part.
 
+## 10d. Song search
+
+**Find a song…** (File menu, Ctrl/⌘ K, and the start screen) searches Apple's free iTunes Search API (`itunes.apple.com/search?media=music&entity=song`, no key) as you type, debounced by 250 ms with stale requests cancelled. Each result shows artwork, title, artist, album · year, length, a 30-second preview button (one shared `<audio>` element, one clip at a time, stopped when the dialog closes) and a **Listen on Apple Music** link, which Apple's terms ask for next to previews.
+
+- **Previews are never exported or used as the soundtrack.** Apple licenses them for previewing only. Picking a song shows a drop zone for the user's own copy; that file goes through the same "new show from a song" path as a plain drop. The show keeps the song's metadata (`SongInfo`: title, artist, album, artwork, Apple Music link, length) for the top bar and the default export name.
+- **Length check:** if the user's file differs from the catalog length by more than 5 s, a non-blocking note says so ("That's fine if it's an edit").
+- **Plain drops get metadata too:** the file name is turned into a search term (`guessFromFileName`), and if a result's title and artist both appear in the name, its artwork and title are attached, with a one-click "Not this song". This never blocks or changes the audio.
+- **CORS:** the endpoint doesn't always send CORS headers, so the app tries `fetch` first and, after a CORS or network `TypeError`, switches to JSONP (`&callback=`, a `<script>` tag with a unique global callback, a timeout and cleanup; `src/app/jsonp.ts`). JSONP runs Apple's response as script, which is acceptable for Apple's own domain only.
+- Pure logic (URL building, defensive parsing, artwork sizes, length check, file-name matching) is in `src/core/songSearch.ts`, tested against a hand-written sample response, since tests never call the network.
+
 ## 11. Risks
 
 - **The car is the real spec.** Some rules are documented loosely and Tesla's own examples bend them (research §6). We need real-car testing, especially for Model X variants.

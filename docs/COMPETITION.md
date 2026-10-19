@@ -37,10 +37,11 @@ Sources: [That Lightshow](https://thatteslalightshow.com/), [Light Show Creator]
 | Beat grid snapping | Next, comes with audio analysis |
 | Many audio formats (That Lightshow takes MP3, WAV, M4A, AAC, OGG, FLAC) | ✅ same set plus Opus; always exported as 44.1 kHz WAV |
 | Drag a song onto the page to start | ✅ |
+| Type a song name, pick from autocomplete | ✅ legally: Apple's iTunes Search with previews and an Apple Music link, then the user adds their own copy, so exports are full-length shows (competitors reportedly build on Apple's 30-second preview clips, which caps a show at 30 seconds and isn't allowed by the preview license) |
 
 ## Decisions
 
-- **No importing songs from YouTube or streaming services.** Jowua's tool takes a YouTube link, but downloading YouTube audio breaks YouTube's terms and copyright law, browsers can't fetch it without a download server, and an open-source project doing it is a takedown target (GitHub removed youtube-dl over a DMCA notice in 2020). Spotify and Apple Music are copy-protected. We follow That Lightshow's "bring your own music" approach and make it as fast as possible: drop in any common format. A legitimate way to search by name would be a catalog of freely licensed music (e.g. Jamendo's API, which needs a registered app key).
+- **No importing songs from YouTube or streaming services.** Jowua's tool takes a YouTube link, but downloading YouTube audio breaks YouTube's terms and copyright law, browsers can't fetch it without a download server, and an open-source project doing it is a takedown target (GitHub removed youtube-dl over a DMCA notice in 2020). Spotify and Apple Music are copy-protected. We follow That Lightshow's "bring your own music" approach and make it as fast as possible: drop in any common format. Searching by name is done legally with Apple's iTunes Search API: users find and preview the song, then drop in their own copy (DESIGN §10d). Preview clips are never exported. A catalog of freely licensed music (e.g. Jamendo's API, which needs a registered app key) could later supply songs users don't own.
 
 ## Notes
 
