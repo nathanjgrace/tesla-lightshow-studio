@@ -50,6 +50,17 @@ Findings from the layout:
 - The **brake light and rear turn signals sit on the rear light bar**, so those channels also light the bar LEDs near them [verified for the positions; how the car mixes them with the bar's own channels is unverified].
 - Tesla's layout spells the channel 45 model "Right Rear Door Handle", though its channel list says "Rear Rear Door Handle" [verified].
 
+## Other models reshaped from the Model S
+
+The Model X, the original Model 3 and the original Model Y are reshaped from `ModelS.obj` (`src/app/car/derive.ts`). The S reference values were measured from the mesh: axles at x = -1.357 and 1.606 m (2.963 m wheelbase, matching the published 2.96 m), wheel radius 0.353 m, roof peak 1.44 m at x = -0.5 m. Targets come from published dimensions [doc, unverified on a car]:
+
+| | Length | Height | Width | Wheelbase |
+|---|---|---|---|---|
+| Model S (2021+) | 4.970 m | 1.445 m | 1.964 m | 2.960 m |
+| Model X (2021+) | 5.057 m | 1.680 m | 1.999 m | 2.965 m |
+| Model Y (2020 – 2024) | 4.751 m | 1.624 m | 1.921 m | 2.890 m |
+| Model 3 (2017 – 2023) | 4.694 m | 1.443 m | 1.849 m | 2.875 m |
+
 ## Moving parts
 
 - **Model S:** from its groups. Windows drop, mirrors fold about their inner edge, the liftgate hinges at its top front edge, the charge port door swings out, and door handles slide out about 2 cm.

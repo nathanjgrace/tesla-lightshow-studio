@@ -12,6 +12,7 @@ import { CHANNELS_BY_INDEX } from '../../core/channels';
 import type { BodyStyle } from '../../core/vehicles';
 import { nearestNodes, nodesOnMesh, pixelIndex, type PlacedNode, type Vec3 } from '../../core/xlightsLayout';
 import type { Builder, BuiltBody } from './CarScene';
+import type { Warp } from './derive';
 import { COLORS } from './kit';
 import { headBeams } from './parts';
 import type { MaterialRole, TeslaAsset } from './teslaAssets';
@@ -21,10 +22,15 @@ const deg = THREE.MathUtils.degToRad;
 /** A triangle of the source mesh, with what we decided it is. */
 interface Tri {
   geometry: THREE.BufferGeometry;
+  /** The source geometry's positions, reshaped when deriving another model. */
+  positions: ArrayLike<number>;
   /** First vertex in the (non-indexed) source geometry. */
   start: number;
   group: string;
   role: MaterialRole;
+  /** Centroid as Tesla modeled it, in mesh units. */
+  source: THREE.Vector3;
+  /** Centroid after reshaping. */
   centroid: THREE.Vector3;
   normal: THREE.Vector3;
   /** Closure part it moves with, if any. */
@@ -36,17 +42,27 @@ interface Tri {
 interface PartRig {
   /** Pivot, in mesh units. */
   pivot: THREE.Vector3;
+  /** A part this one moves with (a window in a door). */
+  parent?: string;
   apply: (group: THREE.Group, position: number, extent: THREE.Box3) => void;
 }
 
 const sideOf = (z: number) => (z < 0 ? 'left' : 'right');
 
-export function buildTeslaBody(b: Builder, asset: TeslaAsset, _style: BodyStyle): BuiltBody {
-  const tris = collectTriangles(asset);
+/**
+ * `warp` reshapes the mesh into another model (see derive.ts); the layout's
+ * positions are reshaped with it, so every lamp keeps its channel.
+ */
+export function buildTeslaBody(b: Builder, asset: TeslaAsset, style: BodyStyle, warp?: Warp): BuiltBody {
+  const tris = collectTriangles(asset, warp);
   const bounds = new THREE.Box3();
-  for (const t of tris) bounds.expandByPoint(t.centroid);
-  const box = { min: bounds.min.toArray() as Vec3, max: bounds.max.toArray() as Vec3 };
-  const nodes = nodesOnMesh(asset.layout, asset.layoutMesh, box);
+  const sourceBounds = new THREE.Box3();
+  for (const t of tris) {
+    bounds.expandByPoint(t.centroid);
+    sourceBounds.expandByPoint(t.source);
+  }
+  const box = { min: sourceBounds.min.toArray() as Vec3, max: sourceBounds.max.toArray() as Vec3 };
+  const nodes = nodesOnMesh(asset.layout, asset.layoutMesh, box).map((n) => (warp ? { ...n, position: warp.apply(n.position, '') } : n));
   const channelOf = (n: PlacedNode) => CHANNELS_BY_INDEX.get(n.channel - 1);
   const lampNodes = nodes.filter((n) => {
     const kind = channelOf(n)?.kind;
@@ -60,7 +76,8 @@ export function buildTeslaBody(b: Builder, asset: TeslaAsset, _style: BodyStyle)
   const rigs = new Map<string, PartRig>();
 
   if (isCybertruck) cybertruckParts(tris, nodes, at, rigs);
-  else modelSParts(tris, at, rigs);
+  else if (style.model === 'modelX') modelXParts(tris, rigs);
+  else modelSParts(tris, at, rigs, style.model === 'model3');
 
   // Lamps: Cybertruck light bars by position along the bar, everything else
   // by the nearest channel in Tesla's layout.
@@ -90,13 +107,19 @@ export function buildTeslaBody(b: Builder, asset: TeslaAsset, _style: BodyStyle)
     list.push(t);
   }
   const partGroups = new Map<string, { group: THREE.Group; extent: THREE.Box3 }>();
-  const partGroup = (part: string) => {
+  const partGroup = (part: string): { group: THREE.Group; extent: THREE.Box3 } => {
     let g = partGroups.get(part);
     if (!g) {
       const rigSpec = rigs.get(part)!;
       const group = new THREE.Group();
       group.position.copy(rigSpec.pivot);
-      rig.add(group);
+      if (rigSpec.parent && rigs.has(rigSpec.parent)) {
+        group.position.sub(rigs.get(rigSpec.parent)!.pivot);
+        partGroup(rigSpec.parent).group.add(group);
+      } else {
+        rig.add(group);
+      }
+      group.userData.baseY = group.position.y;
       g = { group, extent: new THREE.Box3() };
       partGroups.set(part, g);
     }
@@ -166,7 +189,7 @@ export function buildTeslaBody(b: Builder, asset: TeslaAsset, _style: BodyStyle)
   };
 }
 
-function collectTriangles(asset: TeslaAsset): Tri[] {
+function collectTriangles(asset: TeslaAsset, warp?: Warp): Tri[] {
   const out: Tri[] = [];
   const a = new THREE.Vector3();
   const b2 = new THREE.Vector3();
@@ -174,6 +197,14 @@ function collectTriangles(asset: TeslaAsset): Tri[] {
   for (const mesh of asset.meshes) {
     const geometry = mesh.geometry;
     const pos = geometry.attributes.position as THREE.BufferAttribute;
+    // Reshape a copy; the cached asset stays as Tesla made it.
+    let positions: ArrayLike<number> = pos.array;
+    if (warp) {
+      const w = new Float32Array(pos.count * 3);
+      for (let i = 0; i < pos.count; i++) w.set(warp.apply([pos.getX(i), pos.getY(i), pos.getZ(i)], mesh.name), i * 3);
+      positions = w;
+    }
+    const at = (v: THREE.Vector3, i: number) => v.set(positions[i * 3]!, positions[i * 3 + 1]!, positions[i * 3 + 2]!);
     const materials = [mesh.material].flat() as THREE.Material[];
     const groups = geometry.groups.length ? geometry.groups : [{ start: 0, count: pos.count, materialIndex: 0 }];
     for (const g of groups) {
@@ -182,9 +213,13 @@ function collectTriangles(asset: TeslaAsset): Tri[] {
         a.fromBufferAttribute(pos, i);
         b2.fromBufferAttribute(pos, i + 1);
         c.fromBufferAttribute(pos, i + 2);
+        const source = new THREE.Vector3().add(a).add(b2).add(c).divideScalar(3);
+        at(a, i);
+        at(b2, i + 1);
+        at(c, i + 2);
         const centroid = new THREE.Vector3().add(a).add(b2).add(c).divideScalar(3);
         const normal = new THREE.Vector3().subVectors(c, b2).cross(new THREE.Vector3().subVectors(a, b2)).normalize();
-        out.push({ geometry, start: i, group: mesh.name, role, centroid, normal });
+        out.push({ geometry, positions, start: i, group: mesh.name, role, source, centroid, normal });
       }
     }
   }
@@ -200,8 +235,8 @@ function mergeTriangles(list: Tri[]): THREE.BufferGeometry {
     const data = new Float32Array(list.length * 3 * size);
     let o = 0;
     for (const t of list) {
-      const attr = t.geometry.attributes[name] as THREE.BufferAttribute;
-      for (let v = 0; v < 3; v++) for (let s = 0; s < size; s++) data[o++] = attr.array[(t.start + v) * size + s]!;
+      const array = name === 'position' ? t.positions : (t.geometry.attributes[name] as THREE.BufferAttribute).array;
+      for (let v = 0; v < 3; v++) for (let s = 0; s < size; s++) data[o++] = array[(t.start + v) * size + s]!;
     }
     if (name === 'normal') {
       // Tesla's Cybertruck file has a few zero-length normals; one NaN pixel
@@ -254,7 +289,8 @@ function meshMaterials(b: Builder, asset: TeslaAsset): Materials {
 
 // --- Model S: Tesla modeled the moving parts as their own groups ------------
 
-function modelSParts(tris: Tri[], at: (name: string) => Vec3 | undefined, rigs: Map<string, PartRig>): void {
+/** `trunk`: the Model 3's trunk lid hinges below the rear glass, which stays put. */
+function modelSParts(tris: Tri[], at: (name: string) => Vec3 | undefined, rigs: Map<string, PartRig>, trunk = false): void {
   const groups: Record<string, string> = {
     Window_LF: 'leftFrontWindow',
     Window_LR: 'leftRearWindow',
@@ -275,6 +311,7 @@ function modelSParts(tris: Tri[], at: (name: string) => Vec3 | undefined, rigs: 
   ];
   for (const t of tris) {
     t.part = groups[t.group];
+    if (trunk && t.part === 'liftgate' && t.role === 'glass') t.part = undefined;
     if (!t.group.startsWith('Door_') || t.part) continue;
     for (const [part, name] of handles) {
       const p = at(name);
@@ -299,13 +336,87 @@ function modelSParts(tris: Tri[], at: (name: string) => Vec3 | undefined, rigs: 
       rigs.set(part, { pivot, apply: (g, p) => (g.rotation.y = -s * (1 - p) * deg(62)) });
     } else if (part === 'liftgate') {
       const pivot = new THREE.Vector3(e.max.x, e.max.y, 0);
-      rigs.set(part, { pivot, apply: (g, p) => (g.rotation.z = -p * deg(78)) });
+      const angle = deg(trunk ? 62 : 78);
+      rigs.set(part, { pivot, apply: (g, p) => (g.rotation.z = -p * angle) });
     } else if (part === 'chargePort') {
       const pivot = new THREE.Vector3(e.max.x, (e.min.y + e.max.y) / 2, s > 0 ? e.max.z : e.min.z);
       rigs.set(part, { pivot, apply: (g, p) => (g.rotation.y = s * p * deg(-80)) });
     } else if (part.endsWith('DoorHandle')) {
       const pivot = new THREE.Vector3();
       rigs.set(part, { pivot, apply: (g, p) => (g.position.z = s * p * 4) });
+    }
+  }
+}
+
+// --- Model X, derived from the Model S ---------------------------------------
+
+/**
+ * The S's front doors become the X's powered front doors (with their window
+ * and mirror), and its rear doors plus the roof above them become the falcon
+ * wings (with the rear windows). Selection uses Tesla's original
+ * coordinates; pivots use the reshaped ones.
+ */
+function modelXParts(tris: Tri[], rigs: Map<string, PartRig>): void {
+  const groups: Record<string, string> = {
+    Door_LF: 'leftFrontDoor',
+    Door_RF: 'rightFrontDoor',
+    Door_LR: 'leftFalconDoor',
+    Door_RR: 'rightFalconDoor',
+    Window_LF: 'leftFrontWindow',
+    Window_RF: 'rightFrontWindow',
+    Window_LR: 'leftRearWindow',
+    Window_RR: 'rightRearWindow',
+    Door_LF_Mirror: 'leftMirror',
+    Door_RF_Mirror: 'rightMirror',
+    Trunk: 'liftgate',
+    Charge_Cap: 'chargePort',
+  };
+  const rear = new THREE.Box3();
+  for (const t of tris) if (t.group === 'Door_LR' || t.group === 'Door_RR') rear.expandByPoint(t.source);
+  for (const t of tris) {
+    t.part = groups[t.group];
+    const c = t.source;
+    // The roof above each rear door (S units: 0.5 cm) lifts with the wing.
+    if (
+      !t.part &&
+      (t.group === 'Body' || t.group === 'Windows_Top') &&
+      c.x > rear.min.x + 4 &&
+      c.x < rear.max.x - 4 &&
+      c.y > 205 &&
+      Math.abs(c.z) > 8
+    ) {
+      t.part = `${sideOf(c.z)}FalconDoor`;
+    }
+  }
+  const extentOf = (part: string) => {
+    const box = new THREE.Box3();
+    for (const t of tris) if (t.part === part) box.expandByPoint(t.centroid);
+    return box;
+  };
+  for (const part of new Set(tris.map((t) => t.part).filter((p): p is string => !!p))) {
+    const e = extentOf(part);
+    const side = sideOf(e.getCenter(new THREE.Vector3()).z);
+    const s = side === 'right' ? 1 : -1;
+    if (part.endsWith('FalconDoor')) {
+      // Hinged along the roof's center spine.
+      const pivot = new THREE.Vector3((e.min.x + e.max.x) / 2, e.max.y, s * 8);
+      rigs.set(part, { pivot, apply: (g, p) => (g.rotation.x = -s * p * deg(100)) });
+    } else if (part.endsWith('FrontDoor')) {
+      const pivot = new THREE.Vector3(e.max.x, (e.min.y + e.max.y) / 2, s > 0 ? e.max.z : e.min.z);
+      rigs.set(part, { pivot, apply: (g, p) => (g.rotation.y = s * p * deg(65)) });
+    } else if (part.endsWith('Window')) {
+      const drop = (e.max.y - e.min.y) * 0.95;
+      const parent = `${side}${part.includes('Front') ? 'FrontDoor' : 'FalconDoor'}`;
+      rigs.set(part, { pivot: new THREE.Vector3(), parent, apply: (g, p) => (g.position.y = -p * drop + g.userData.baseY) });
+    } else if (part.endsWith('Mirror')) {
+      const pivot = new THREE.Vector3(e.max.x - 8, e.min.y, s > 0 ? e.min.z : e.max.z);
+      rigs.set(part, { pivot, parent: `${side}FrontDoor`, apply: (g, p) => (g.rotation.y = -s * (1 - p) * deg(62)) });
+    } else if (part === 'liftgate') {
+      const pivot = new THREE.Vector3(e.max.x, e.max.y, 0);
+      rigs.set(part, { pivot, apply: (g, p) => (g.rotation.z = -p * deg(78)) });
+    } else if (part === 'chargePort') {
+      const pivot = new THREE.Vector3(e.max.x, (e.min.y + e.max.y) / 2, s > 0 ? e.max.z : e.min.z);
+      rigs.set(part, { pivot, apply: (g, p) => (g.rotation.y = s * p * deg(-80)) });
     }
   }
 }

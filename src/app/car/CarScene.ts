@@ -12,6 +12,7 @@ import type { PaintFinish } from '../../core/paint';
 import type { Simulation } from '../../core/simulate';
 import type { BodyStyle } from '../../core/vehicles';
 import { buildBody } from './bodies';
+import { warpFor } from './derive';
 import { buildTeslaBody } from './meshBody';
 import type { TeslaAsset } from './teslaAssets';
 import { shadowTexture } from './kit';
@@ -271,7 +272,8 @@ export class CarScene {
       closure: (id, apply) => this.closures.push({ id, apply }),
       beam: (ids, light, max) => this.beams.push({ ids, light, max }),
     };
-    this.bounds = asset ? buildTeslaBody(builder, asset, style) : buildBody(builder, style);
+    const warp = asset?.model === 'modelS' ? warpFor(style) : undefined;
+    this.bounds = asset ? buildTeslaBody(builder, asset, style, warp) : buildBody(builder, style);
     this.applyPaint();
     this.target.set(0, this.bounds.height * 0.46, 0);
     if (!this.userMovedCamera) {
@@ -328,8 +330,17 @@ export class CarScene {
   private applyPaint(): void {
     const hex = this.paint?.hex ?? this.bounds.paint ?? DEFAULT_PAINT;
     const params = { ...PAINT_FINISHES[this.paint?.finish ?? 'pearl'] };
-    // Metal shows mostly what it reflects, so without reflections it would go dark.
-    if (!this.reflections) params.metalness = Math.min(params.metalness ?? 0, 0.3);
+    if (this.reflections) {
+      // Never mirror-sharp: a pinpoint highlight of the moon blooms into a dot
+      // that reads as a lamp.
+      params.clearcoatRoughness = Math.max(params.clearcoatRoughness ?? 0, 0.16);
+    } else {
+      // Soft, satin-like paint with no clearcoat, so only the show's own
+      // lights glow. Metal shows mostly what it reflects, so it would go dark.
+      params.metalness = Math.min(params.metalness ?? 0, 0.3);
+      params.roughness = Math.max(params.roughness ?? 0, 0.62);
+      params.clearcoat = 0;
+    }
     for (const mat of [this.m.paint, this.m.meshPaint]) {
       mat.setValues(params);
       mat.color.set(hex);

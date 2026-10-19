@@ -4,7 +4,8 @@ import { parsePaintChoice, resolvePaint, type PaintChoice } from '../core/paint'
 import type { Simulation } from '../core/simulate';
 import type { VehicleProfile } from '../core/vehicles';
 import { CAMERA_PRESETS, CarScene } from './car/CarScene';
-import { hasTeslaMesh, loadTeslaAsset, type TeslaAsset } from './car/teslaAssets';
+import { warpFor } from './car/derive';
+import { loadTeslaAsset, teslaMeshFor, type TeslaAsset } from './car/teslaAssets';
 import { PaintPicker } from './PaintPicker';
 import type { Playback } from './playback';
 
@@ -77,13 +78,15 @@ export function CarView({ sim, vehicle, playback }: { sim: Simulation | undefine
     return () => s.dispose();
   }, []);
 
-  // Tesla's own 3D model where it publishes one (Model S, Cybertruck); the
-  // code-built body shows while it downloads, and if it can't be loaded.
+  // Tesla's own 3D model where it publishes one (Model S, Cybertruck) or one
+  // we can derive from it (Model X); the code-built body shows while it
+  // downloads, and if it can't be loaded.
+  const meshModel = teslaMeshFor(body);
   const [hq, setHq] = useState<ModelState>();
   useEffect(() => {
-    if (!hasTeslaMesh(body.model)) return;
+    if (!meshModel) return;
     let live = true;
-    const model = body.model;
+    const model = meshModel;
     setHq({ model, progress: 0 });
     loadTeslaAsset(model, (progress) => live && setHq({ model, progress }))
       .then((asset) => live && setHq({ model, progress: 1, asset }))
@@ -94,9 +97,9 @@ export function CarView({ sim, vehicle, playback }: { sim: Simulation | undefine
     return () => {
       live = false;
     };
-  }, [body.model]);
-  const asset = hq?.model === body.model ? hq.asset : undefined;
-  const loading = hq?.model === body.model && !hq.asset && !hq.failed;
+  }, [meshModel]);
+  const asset = meshModel && hq?.model === meshModel ? hq.asset : undefined;
+  const loading = !!meshModel && hq?.model === meshModel && !hq.asset && !hq.failed;
 
   useEffect(() => scene?.setBody(body, asset), [scene, body, asset]);
 
@@ -122,7 +125,9 @@ export function CarView({ sim, vehicle, playback }: { sim: Simulation | undefine
         <span className="pane-badge-title">{vehicle.name}</span>
         <span>
           {asset
-            ? "Tesla's 3D model"
+            ? asset.model === body.model
+              ? "Tesla's 3D model"
+              : (warpFor(body)?.label ?? "Tesla's 3D model")
             : loading
               ? `Loading Tesla's 3D model… ${Math.round((hq?.progress ?? 0) * 100)}%`
               : 'Stylized preview'}
