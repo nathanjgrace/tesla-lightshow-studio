@@ -189,6 +189,9 @@ export function Composer(props: Props) {
     let rows: Row[] = [];
     let rowTops: number[] = [];
     let contentH = 0;
+    /** Rows that take effects, in order, and each channel's place among them. */
+    let lanes: number[] = [];
+    let laneOf = new Map<string, number>();
 
     // Pointer drag in progress (declared early: drawing reads createPreview).
     type Drag =
@@ -199,14 +202,21 @@ export function Composer(props: Props) {
           kind: 'edit';
           edge: 'start' | 'end' | 'body';
           grabMs: number;
+          /** The lane (editable row) the pointer grabbed, for moves between channels. */
+          grabLane: number;
           originals: Effect[];
           snapshot: readonly Effect[];
           moved: boolean;
           clicked: Effect;
           additive: boolean;
-        };
+          /** Ctrl/Cmd held: the drag moves copies and leaves the originals. */
+          duplicate: boolean;
+        }
+      | { kind: 'marquee'; x0: number; y0: number; x1: number; y1: number; base: ReadonlySet<string> };
     let drag: Drag | undefined;
     let createPreview: { row: number; a: number; b: number } | undefined;
+    /** Shown beside the pointer while dragging effects: where they'll land. */
+    let dragLabel: { x: number; y: number; text: string } | undefined;
 
     const d = () => data.current;
     const durationMs = () => d().show.frameCount * d().show.stepTimeMs;
@@ -225,6 +235,8 @@ export function Composer(props: Props) {
         y += rowHeight(r);
       }
       contentH = y;
+      lanes = rows.flatMap((r, i) => (rowChannel(r) ? [i] : []));
+      laneOf = new Map(lanes.map((r, i) => [rowChannel(rows[r]!)!, i]));
     }
 
     function clampView() {
@@ -548,6 +560,28 @@ export function Composer(props: Props) {
         ctx.lineTo(x, 8);
         ctx.fill();
       }
+      if (drag?.kind === 'marquee') {
+        const x0 = Math.min(drag.x0, drag.x1);
+        const y0 = Math.min(drag.y0, drag.y1);
+        ctx.fillStyle = 'rgba(110, 168, 255, 0.12)';
+        ctx.strokeStyle = C.selection;
+        ctx.lineWidth = 1;
+        ctx.fillRect(x0, y0, Math.abs(drag.x1 - drag.x0), Math.abs(drag.y1 - drag.y0));
+        ctx.strokeRect(x0 + 0.5, y0 + 0.5, Math.abs(drag.x1 - drag.x0), Math.abs(drag.y1 - drag.y0));
+      }
+      if (dragLabel) {
+        ctx.font = '600 10.5px Inter Variable, system-ui, sans-serif';
+        const w = ctx.measureText(dragLabel.text).width + 14;
+        const lx = Math.min(width - w - 4, dragLabel.x + 14);
+        const ly = Math.max(HEADER_H + 2, dragLabel.y - 30);
+        ctx.fillStyle = 'rgba(22, 25, 30, 0.95)';
+        roundRect(ctx, lx, ly, w, 20, 5);
+        ctx.fill();
+        ctx.strokeStyle = C.selection;
+        ctx.stroke();
+        ctx.fillStyle = '#fff';
+        ctx.fillText(dragLabel.text, lx + 7, ly + 14);
+      }
       if (createPreview) {
         const y = HEADER_H + rowTops[createPreview.row]! - view.scrollY;
         ctx.strokeStyle = C.selection;
@@ -643,6 +677,14 @@ export function Composer(props: Props) {
       return -1;
     }
 
+    /** The lane under (or nearest below) a y position, for dragging between channels. */
+    function laneAt(y: number): number {
+      const r = rowAt(y);
+      let best = 0;
+      for (let i = 0; i < lanes.length; i++) if (lanes[i]! <= r) best = i;
+      return best;
+    }
+
     function hit(x: number, y: number): Hit {
       if (x < LABEL_W) return { zone: 'none' };
       if (y < HEADER_H) {
@@ -715,6 +757,9 @@ export function Composer(props: Props) {
       } else if (h.zone === 'seek') {
         drag = { kind: 'seek' };
         d().playback.seek(t);
+      } else if (h.zone === 'empty' && e.shiftKey) {
+        // Shift-drag on empty space: box-select, adding to the selection.
+        drag = { kind: 'marquee', x0: x, y0: y, x1: x, y1: y, base: new Set(editor.selection) };
       } else if (h.zone === 'empty') {
         drag = { kind: 'create', row: h.row, channel: h.channel, anchorMs: snapMs(t, e.altKey), moved: false };
       } else if (h.zone === 'effect') {
@@ -732,6 +777,8 @@ export function Composer(props: Props) {
           moved: false,
           clicked: h.effect,
           additive,
+          grabLane: laneAt(y),
+          duplicate: (e.ctrlKey || e.metaKey) && h.edge === 'body',
         };
       }
     }
@@ -761,6 +808,11 @@ export function Composer(props: Props) {
           const start = Math.max(0, Math.min(durationMs() - length, drag.startMs + t - drag.grabMs));
           d().onRangeChange({ startMs: start, endMs: start + length });
         }
+      } else if (drag.kind === 'marquee') {
+        drag.x1 = Math.max(LABEL_W, Math.min(width, x));
+        drag.y1 = Math.max(HEADER_H, Math.min(height, y));
+        d().editor.select(new Set([...drag.base, ...inMarquee(drag)]));
+        drawFrame();
       } else if (drag.kind === 'create') {
         const b = snapMs(t, e.altKey);
         if (Math.abs(xOf(b) - xOf(drag.anchorMs)) > 3) drag.moved = true;
@@ -768,31 +820,78 @@ export function Composer(props: Props) {
         drawFrame();
       } else {
         const delta = t - drag.grabMs;
-        if (!drag.moved && Math.abs(delta / 1000) * view.pxPerSec < 3) return;
+        const edge = drag.edge;
+        // Moving between channels: whole lanes, kept within the timeline, and
+        // only onto channels of the same family (lights stay lights).
+        let laneDelta = edge === 'body' ? laneAt(y) - drag.grabLane : 0;
+        if (laneDelta) {
+          const own = drag.originals.map((o) => laneOf.get(o.channel) ?? 0);
+          laneDelta = Math.max(-Math.min(...own), Math.min(lanes.length - 1 - Math.max(...own), laneDelta));
+        }
+        if (!drag.moved && Math.abs(delta / 1000) * view.pxPerSec < 3 && !laneDelta) return;
         const editor = d().editor;
         if (!drag.moved) {
           drag.moved = true;
           editor.beginChange();
+          if (drag.duplicate) drag.originals = drag.originals.map((o) => ({ ...o, id: newEffectId() }));
         }
         const step = d().show.stepTimeMs;
-        const edge = drag.edge;
+        const channelFor = (o: Effect) => {
+          if (!laneDelta) return o.channel;
+          const target = rowChannel(rows[lanes[(laneOf.get(o.channel) ?? 0) + laneDelta]!]!)!;
+          return effectFamily(target) === effectFamily(o.channel) ? target : o.channel;
+        };
         const updated = drag.originals.map((o) => {
           if (edge === 'body') {
             const len = o.endMs - o.startMs;
             const start = Math.max(0, Math.min(durationMs() - len, snapMs(o.startMs + delta, e.altKey)));
-            return { ...o, startMs: start, endMs: start + len };
+            return { ...o, channel: channelFor(o), startMs: start, endMs: start + len };
           }
           if (edge === 'start') return { ...o, startMs: Math.min(snapMs(o.startMs + delta, e.altKey), o.endMs - step) };
           return { ...o, endMs: Math.max(snapMs(o.endMs + delta, e.altKey), o.startMs + step) };
         });
         editor.setEffects(placeEffects(drag.snapshot, updated), false);
+        const leadId = drag.originals[0]!.id;
+        const lead = updated.find((u) => u.id === leadId) ?? updated[0]!;
+        const name = rows[lanes[laneOf.get(lead.channel) ?? 0]!]?.label ?? '';
+        const when = edge === 'end' ? lead.endMs : lead.startMs;
+        dragLabel = { x, y, text: `${drag.duplicate ? 'Copy · ' : ''}${formatTime(when)}${edge === 'body' ? ` · ${name}` : ''}` };
+        drawFrame();
       }
+    }
+
+    /** Effects inside a box-selection rectangle. */
+    function inMarquee(m: { x0: number; y0: number; x1: number; y1: number }): string[] {
+      const [ta, tb] = [msOf(Math.min(m.x0, m.x1)), msOf(Math.max(m.x0, m.x1))];
+      const [ra, rb] = [rowAt(Math.min(m.y0, m.y1)), rowAt(Math.max(m.y0, m.y1))];
+      const channels = new Set<string>();
+      for (let r = Math.max(0, ra); r <= rb; r++) {
+        const c = rows[r] && rowChannel(rows[r]!);
+        if (c) channels.add(c);
+      }
+      return (d().editor.project?.effects ?? []).filter((fx) => channels.has(fx.channel) && fx.endMs > ta && fx.startMs < tb).map((fx) => fx.id);
+    }
+
+    /** Esc during a drag puts everything back. */
+    function onKey(e: KeyboardEvent) {
+      if (e.key !== 'Escape' || !drag) return;
+      if (drag.kind === 'edit' && drag.moved) {
+        d().editor.setEffects(drag.snapshot, false);
+        d().editor.select(drag.duplicate ? [] : drag.originals.map((o) => o.id));
+      }
+      if (drag.kind === 'marquee') d().editor.select(drag.base);
+      drag = undefined;
+      createPreview = undefined;
+      dragLabel = undefined;
+      e.stopPropagation();
+      drawFrame();
     }
 
     function onUp(e: PointerEvent) {
       const current = drag;
       drag = undefined;
       createPreview = undefined;
+      dragLabel = undefined;
       if (!current) return;
       const editor = d().editor;
       if (current.kind === 'create') {
@@ -809,6 +908,9 @@ export function Composer(props: Props) {
         const endMs = Math.max(current.anchorMs, b, startMs + d().show.stepTimeMs);
         const kind = effectFamily(current.channel) === 'closure' ? editor.closureBrush : editor.lightBrush;
         editor.place([{ id: newEffectId(), channel: current.channel, startMs, endMs, kind }]);
+      } else if (current.kind === 'marquee') {
+        // A plain shift-click on empty space just seeks.
+        if (Math.abs(current.x1 - current.x0) < 3 && Math.abs(current.y1 - current.y0) < 3) d().playback.seek(msOf(current.x0));
       } else if (current.kind === 'edit' && !current.moved) {
         // A click on an effect: select it (or toggle it with shift/cmd).
         if (current.additive) {
@@ -839,7 +941,9 @@ export function Composer(props: Props) {
     cv.addEventListener('pointermove', onMove);
     cv.addEventListener('pointerup', onUp);
     cv.addEventListener('dblclick', onDouble);
+    window.addEventListener('keydown', onKey, true);
     return () => {
+      window.removeEventListener('keydown', onKey, true);
       observer.disconnect();
       unsubscribe();
       cv.removeEventListener('wheel', onWheel);

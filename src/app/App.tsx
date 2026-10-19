@@ -45,7 +45,7 @@ import { CarView } from './CarView';
 import { shortVehicleName, useCarLook } from './carLook';
 import { PaintPicker } from './PaintPicker';
 import { Shortcuts } from './Shortcuts';
-import { Composer, type Range } from './Composer';
+import { buildRows, Composer, type Range } from './Composer';
 import { ComposerBar } from './ComposerBar';
 import { ExportDialog, UsbHelpDialog, VinDialog } from './dialogs';
 import { exportFseq, exportUsbZip } from './exportShow';
@@ -381,7 +381,28 @@ export function App() {
         playback.toggle();
       } else if (e.code === 'Home') playback.seek(0);
       else if (e.code === 'End') playback.seek(durationMs);
-      else if ((key === 'arrowleft' || key === 'arrowright') && !mod) {
+      else if (e.altKey && !mod && /^arrow/.test(key) && editor.selection.size) {
+        // Alt + arrows move the selected effects: a frame (Shift: a beat) in
+        // time, or to the channel above or below.
+        e.preventDefault();
+        const sel = selectedEffects();
+        if (key === 'arrowleft' || key === 'arrowright') {
+          const a = analysis.status === 'ready' ? analysis.analysis : undefined;
+          const step = (e.shiftKey && a?.bpm ? 60000 / a.bpm : (show?.stepTimeMs ?? 20)) * (key === 'arrowright' ? 1 : -1);
+          const lo = Math.min(...sel.map((fx) => fx.startMs));
+          const hi = Math.max(...sel.map((fx) => fx.endMs));
+          const by = Math.max(-lo, Math.min(durationMs - hi, step));
+          if (by) editor.place(sel.map((fx) => ({ ...fx, startMs: fx.startMs + by, endMs: fx.endMs + by })));
+        } else {
+          const lanes = buildRows(vehicle).flatMap((r) => (r.type === 'closure' ? [r.id] : r.type === 'light' && r.editable ? [r.ids[0]!] : []));
+          const dir = key === 'arrowdown' ? 1 : -1;
+          const moved = sel.map((fx) => {
+            const target = lanes[lanes.indexOf(fx.channel) + dir];
+            return target && effectFamily(target) === effectFamily(fx.channel) ? { ...fx, channel: target } : fx;
+          });
+          if (moved.some((fx, i) => fx.channel !== sel[i]!.channel)) editor.place(moved);
+        }
+      } else if ((key === 'arrowleft' || key === 'arrowright') && !mod) {
         // By beat (bar with Shift) when the song is analyzed, else by ¼ s (1 s).
         e.preventDefault();
         const a = analysis.status === 'ready' ? analysis.analysis : undefined;
@@ -440,7 +461,7 @@ export function App() {
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [playback, modal, editor, selectedEffects, mirrorSelection, findSong, analysis, durationMs, show]);
+  }, [playback, modal, editor, selectedEffects, mirrorSelection, findSong, analysis, durationMs, show, vehicle]);
 
   const timeRef = useRef<HTMLSpanElement>(null);
   useEffect(

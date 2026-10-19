@@ -130,6 +130,7 @@ audio ──▶ analysis (Worker) ──▶ choreograph(style, profile) ──�
 
 - Timeline on canvas: tracks grouped Front / Rear / Closures / Interior, with waveform and beat grid, zoom down to single frames.
 - Effects: place, drag, resize and snap to beats; keyboard shortcuts compatible with Tesla's xLights hotkeys (Q/A/Z/F, W/S/X, E/D/C) so xLights users feel at home.
+- Moving: drag effects in time or up/down onto another channel of the same kind (a label shows where they'll land); Ctrl/⌘-drag duplicates; Shift-drag on empty space box-selects; Esc cancels a drag; Alt+←/→ nudge the selection a frame (Shift: a beat), Alt+↑/↓ move it to the channel above/below.
 - Scrubbing: ←/→ step by beat (Shift: by bar) once the song is analyzed, ¼ s (1 s) before; `,`/`.` step one frame; Home/End jump to the ends. A keyboard button in the transport lists every shortcut on hover (pinned with a click or `?`).
 - Layers, value curves, copy/paste, mirror L↔R, "fill with pattern".
 - A Problems panel that is always visible: validator issues with times, click to jump.
