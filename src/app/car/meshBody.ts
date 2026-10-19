@@ -339,8 +339,9 @@ function meshMaterials(b: Builder, asset: TeslaAsset): Materials {
     sideGlass: b.m.sideGlass,
     // Lamp housings: not mirror-glossy, or every lot light, the moon and the
     // car's own beams show up as pinpoint glints of color inside the lamps.
-    lens: new THREE.MeshStandardMaterial({ map: tex('Lights_AO.png'), roughness: 0.45, metalness: 0, envMapIntensity: 0.4 }),
-    redLens: new THREE.MeshStandardMaterial({ map: tex(ct ? 'Lights_AO_Red.png' : 'Lights_Red_AO.png'), roughness: 0.45, metalness: 0, envMapIntensity: 0.4 }),
+    // Unlit lamps read dark, as on the real car at night; light comes only from emission.
+    lens: new THREE.MeshStandardMaterial({ map: tex('Lights_AO.png'), color: '#9c9c9c', roughness: 0.45, metalness: 0, envMapIntensity: 0.2 }),
+    redLens: new THREE.MeshStandardMaterial({ map: tex(ct ? 'Lights_AO_Red.png' : 'Lights_Red_AO.png'), color: '#8a8a8a', roughness: 0.45, metalness: 0, envMapIntensity: 0.2 }),
     wheel: new THREE.MeshStandardMaterial({
       map: tex(ct ? 'Cybertruck_Premium_Wheel_AO_Dark.png' : 'Arachnid_Wheel_AO.png'),
       roughness: 0.35,

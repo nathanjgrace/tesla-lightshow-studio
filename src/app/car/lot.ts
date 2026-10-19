@@ -76,7 +76,7 @@ const MIRROR_SHADER = {
     textureMatrix: { value: null },
     fadeNear: { value: 14 },
     fadeFar: { value: 42 },
-    strength: { value: 1.5 },
+    strength: { value: 1.2 },
   },
   vertexShader: /* glsl */ `
     uniform mat4 textureMatrix;
@@ -119,6 +119,10 @@ const MIRROR_SHADER = {
         total += w;
       }
       vec3 reflection = sum / total;
+      // Lights reflect at full strength; lit paint and the lot only faintly,
+      // so the wet ground never glows when every lamp on the car is off.
+      float lum = dot(reflection, vec3(0.2126, 0.7152, 0.0722));
+      reflection *= mix(0.22, 1.0, smoothstep(0.7, 1.8, lum));
       vec3 v = normalize(cameraPosition - vWorld);
       float fresnel = 0.02 + 0.98 * pow(1.0 - max(v.y, 0.0), 5.0);
       float amount = (0.4 + 0.6 * fresnel) * mix(0.5, 1.0, puddle) * mix(1.0, 0.55, paint);
