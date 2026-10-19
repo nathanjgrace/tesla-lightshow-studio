@@ -1,0 +1,38 @@
+
+===== chromium / normal =====
+[dialog] Find a song | ✕ | One More Time | Daft Punk | Discovery · 2000 | Listen on Apple Music | 5:20 | One More Time (Short Radio Edit) | Daft Punk | Musique, Vol. 1 (1993-2005) · 2000 | Listen on Apple Music | 3:55 | One More Time (12 Mix) | Daft Punk | One More Time - Single · 2000 | Listen on Apple Music | 8:00 | One More Time (Radio Edit) | Daft Punk | One More Time - Single · 2000 | Listen on Apple Music | 5:20 | One More Time (Romanthony's Unplugged) | Daft Punk | Daft Club · 2003 | Listen on Apple Music | 3:41 | One More Time (Short Radio Edit) | Daft Punk | One More Time - Single · 2000 | Listen on Apple Music | 3:55 | One More Time | Jbizz | Tattoos & Love Notes · 2012 | Listen on Apple Music | 3:40 | Search and previews by Apple Music, or Deezer when Apple can
+[preview] {"src":"https://audio-ssl.itunes.apple.com/itunes-assets/AudioPrevie","time":"3.46","paused":false,"error":null}
+
+===== chromium / appleBlocked =====
+[console.warning] Song search: Apple Music failed (blocked): blocked by the browser, an extension or the network
+[dialog] Find a song | ✕ | Searching… | Search and previews by Apple Music, or Deezer when Apple can't be reached. Previews are only for picking a song; they're never used in your show or its export.
+[preview] {"src":"https://cdnt-preview.dzcdn.net/api/1/1/f/8/c/0/f8c5dc3837912","time":"3.48","paused":false,"error":null}
+
+===== chromium / appleRateLimited =====
+[console.warning] Song search: Apple Music failed (busy): busy or rate-limited (HTTP 403)
+[dialog] Find a song | ✕ | One More Time | Daft Punk | Discovery | Listen on Deezer | 5:20 | One More Time (Short Radio Edit) | Daft Punk | One More Time | Listen on Deezer | 3:55 | One More Time (12 Mix) | Daft Punk | One More Time | Listen on Deezer | 8:00 | One More Time / Aerodynamic | Daft Punk | Alive 2007 | Listen on Deezer | 6:10 | One More Time (Romanthony's Unplugged) | Daft Punk | Daft Club | Listen on Deezer | 3:40 | One More Time (Daft Punk) | The Believers in a Dream | Best 80's & 90's POP songs REMIXED & REMASTERED, Vol. 12 | Listen on Deezer | 6:26 | One More Time (As Made Famous By Daft Punk) | The Backing Tracks | Instrumental Tracks For Vocalists Vol. 1 - Instrumental Backing Tracks For Singers Minus Vocals | Listen on Deezer | 7:49 | Daft Punk Medley: O
+[preview] {"src":"https://cdnt-preview.dzcdn.net/api/1/1/f/8/c/0/f8c5dc3837912","time":"3.45","paused":false,"error":null}
+
+===== chromium / bothBlocked =====
+[console.warning] Song search: Apple Music failed (blocked): blocked by the browser, an extension or the network
+[console.warning] Song search: Deezer failed (blocked): blocked by the browser, an extension or the network
+[dialog] Find a song | ✕ | Couldn't reach the music catalogs | Apple Music (itunes.apple.com): blocked by the browser, an extension or the network | Deezer (api.deezer.com): blocked by the browser, an extension or the network | An ad or content blocker, a privacy extension or a network filter (work, school, Pi-hole) is likely blocking these sites. Allow them for this page, or drop your song file here to start without searching. | Try again | Search and previews by Apple Music, or Deezer when Apple can't be reached. Previews are only for picking a song; they're never used in your show or its export.
+
+===== webkit / normal =====
+[dialog] Find a song | ✕ | One More Time | Daft Punk | Discovery · 2000 | Listen on Apple Music | 5:20 | One More Time (Short Radio Edit) | Daft Punk | Musique, Vol. 1 (1993-2005) · 2000 | Listen on Apple Music | 3:55 | One More Time (12 Mix) | Daft Punk | One More Time - Single · 2000 | Listen on Apple Music | 8:00 | One More Time (Radio Edit) | Daft Punk | One More Time - Single · 2000 | Listen on Apple Music | 5:20 | One More Time (Romanthony's Unplugged) | Daft Punk | Daft Club · 2003 | Listen on Apple Music | 3:41 | One More Time (Short Radio Edit) | Daft Punk | One More Time - Single · 2000 | Listen on Apple Music | 3:55 | One More Time | Jbizz | Tattoos & Love Notes · 2012 | Listen on Apple Music | 3:40 | Search and previews by Apple Music, or Deezer when Apple can
+[preview] {"src":"https://audio-ssl.itunes.apple.com/itunes-assets/AudioPrevie","time":"2.79","paused":false,"error":null}
+
+===== webkit / appleBlocked =====
+[console.warning] Song search: Apple Music failed (blocked): blocked by the browser, an extension or the network
+[dialog] Find a song | ✕ | One More Time | Daft Punk | Discovery | Listen on Deezer | 5:20 | One More Time (Short Radio Edit) | Daft Punk | One More Time | Listen on Deezer | 3:55 | One More Time (12 Mix) | Daft Punk | One More Time | Listen on Deezer | 8:00 | One More Time / Aerodynamic | Daft Punk | Alive 2007 | Listen on Deezer | 6:10 | One More Time (Romanthony's Unplugged) | Daft Punk | Daft Club | Listen on Deezer | 3:40 | One More Time (Daft Punk) | The Believers in a Dream | Best 80's & 90's POP songs REMIXED & REMASTERED, Vol. 12 | Listen on Deezer | 6:26 | One More Time (As Made Famous By Daft Punk) | The Backing Tracks | Instrumental Tracks For Vocalists Vol. 1 - Instrumental Backing Tracks For Singers Minus Vocals | Listen on Deezer | 7:49 | Daft Punk Medley: O
+[preview] {"src":"https://cdnt-preview.dzcdn.net/api/1/1/f/8/c/0/f8c5dc3837912","time":"2.84","paused":false,"error":null}
+
+===== webkit / appleRateLimited =====
+[console.warning] Song search: Apple Music failed (busy): busy or rate-limited (HTTP 403)
+[dialog] Find a song | ✕ | One More Time | Daft Punk | Discovery | Listen on Deezer | 5:20 | One More Time (Short Radio Edit) | Daft Punk | One More Time | Listen on Deezer | 3:55 | One More Time (12 Mix) | Daft Punk | One More Time | Listen on Deezer | 8:00 | One More Time / Aerodynamic | Daft Punk | Alive 2007 | Listen on Deezer | 6:10 | One More Time (Romanthony's Unplugged) | Daft Punk | Daft Club | Listen on Deezer | 3:40 | One More Time (Daft Punk) | The Believers in a Dream | Best 80's & 90's POP songs REMIXED & REMASTERED, Vol. 12 | Listen on Deezer | 6:26 | One More Time (As Made Famous By Daft Punk) | The Backing Tracks | Instrumental Tracks For Vocalists Vol. 1 - Instrumental Backing Tracks For Singers Minus Vocals | Listen on Deezer | 7:49 | Daft Punk Medley: O
+[preview] {"src":"https://cdnt-preview.dzcdn.net/api/1/1/f/8/c/0/f8c5dc3837912","time":"2.84","paused":false,"error":null}
+
+===== webkit / bothBlocked =====
+[console.warning] Song search: Apple Music failed (blocked): blocked by the browser, an extension or the network
+[console.warning] Song search: Deezer failed (blocked): blocked by the browser, an extension or the network
+[dialog] Find a song | ✕ | Couldn't reach the music catalogs | Apple Music (itunes.apple.com): blocked by the browser, an extension or the network | Deezer (api.deezer.com): blocked by the browser, an extension or the network | An ad or content blocker, a privacy extension or a network filter (work, school, Pi-hole) is likely blocking these sites. Allow them for this page, or drop your song file here to start without searching. | Try again | Search and previews by Apple Music, or Deezer when Apple can't be reached. Previews are only for picking a song; they're never used in your show or its export.

@@ -2,36 +2,36 @@
 HTTP/2 200 
 server: daiquiri/5
 content-type: text/javascript; charset=utf-8
-x-apple-jingle-correlation-key: GPSIDS2OKFDUM4RWE72LENPAPA
-x-apple-request-uuid: 33e481cb-4e51-4746-7236-27f4b235e078
+x-apple-jingle-correlation-key: 4SPK6OQRAZN2KU5UJL4IZK2K7U
+x-apple-request-uuid: e49eaf3a-1106-5ba5-53b4-4af88cab4afd
 x-apple-translated-wo-url: /WebObjects/MZStoreServices.woa/ws/wsSearch?term=one+more+time&media=music&entity=song&limit=2&urlDesc=
 apple-tk: false
-x-b3-spanid: 52673c9e9a80c2c7
-b3: 33e481cb4e514746723627f4b235e078-52673c9e9a80c2c7
+x-b3-spanid: b8fe4633db0e6538
+b3: e49eaf3a11065ba553b44af88cab4afd-b8fe4633db0e6538
 content-disposition: attachment; filename=1.txt
-x-b3-traceid: 33e481cb4e514746723627f4b235e078
+x-b3-traceid: e49eaf3a11065ba553b44af88cab4afd
 x-content-type-options: nosniff
 x-webobjects-loadaverage: 0
-x-responding-instance: MZStoreServices:6502405:::
+x-responding-instance: MZStoreServices:6502601:::
 apple-seq: 0.0
 access-control-allow-origin: *
 apple-originating-system: MZStoreServices
 strict-transport-security: max-age=31536000; includeSubDomains
 x-apple-orig-url: https://mzstoreservices-mr.itunes.apple.com/search?term=one+more+time&media=music&entity=song&limit=2
 x-apple-application-site: MR22
-apple-timing-app: 152 ms
-x-apple-application-instance: 6502405
-x-daiquiri-instance: daiquiri:17317005:mr85p00it-hyhk04174901:7987:26HOTFIX41:daiquiri-amp-store-shared-int-001-mr
-x-daiquiri-debug-worker-pid: 57783
-x-daiquiri-instance: daiquiri:12282007:mr47p00it-qujn07093001:7987:26HOTFIX41:daiquiri-amp-store-l7shared-ext-001-mr
-x-daiquiri-debug-worker-pid: 91154
+apple-timing-app: 160 ms
+x-apple-application-instance: 6502601
+x-daiquiri-instance: daiquiri:17317003:mr85p00it-hyhk03164601:7987:26HOTFIX41:daiquiri-amp-store-shared-int-001-mr
+x-daiquiri-debug-worker-pid: 39706
+x-daiquiri-instance: daiquiri:12282005:mr47p00it-qujn02122302:7987:26HOTFIX41:daiquiri-amp-store-l7shared-ext-001-mr
+x-daiquiri-debug-worker-pid: 15290
 vary: origin
 cache-control: max-age=86400
-date: Mon, 19 Oct 2026 01:38:05 GMT
+date: Mon, 19 Oct 2026 01:43:39 GMT
 content-length: 3076
-x-cache: TCP_MISS from a23-48-200-185.deploy.akamaitechnologies.com (AkamaiGHost/22.6.5-e48a1e600c03e7d517694b5b11b937be) (-)
+x-cache: TCP_MISS from a23-209-83-77.deploy.akamaitechnologies.com (AkamaiGHost/22.6.5-e48a1e600c03e7d517694b5b11b937be) (-)
 x-true-cache-key: /L/itunes.apple.com/search?entity=song&limit=2&media=music&term=one+more+timeBrowser vcd=2897
-x-cache-remote: TCP_MISS from a23-220-106-85.deploy.akamaitechnologies.com (AkamaiGHost/22.6.5-e48a1e600c03e7d517694b5b11b937be) (-)
+x-cache-remote: TCP_MISS from a23-192-164-18.deploy.akamaitechnologies.com (AkamaiGHost/22.6.5-e48a1e600c03e7d517694b5b11b937be) (-)
 x-apple-partner: origin.0
 
 
@@ -45,37 +45,36 @@ x-apple-partner: origin.0
 HTTP/2 200 
 server: daiquiri/5
 content-type: text/javascript; charset=utf-8
-x-apple-jingle-correlation-key: X4XB64ZQFO4BDRSAR3HKGABM3A
-x-apple-request-uuid: bf2e1f73-302b-b811-c640-8ecea3002cd8
+x-apple-jingle-correlation-key: FQYGB2UZN7ZQSCS5G4TGQY5PEM
+x-apple-request-uuid: 2c3060ea-996f-f309-0a5d-37266863af23
 x-apple-translated-wo-url: /WebObjects/MZStoreServices.woa/ws/wsSearch?term=daft+punk&media=music&entity=song&limit=2&urlDesc=
 apple-tk: false
-x-b3-spanid: 1c428327f21c029a
-b3: bf2e1f73302bb811c6408ecea3002cd8-1c428327f21c029a
+x-b3-spanid: c1e421b32e286745
+b3: 2c3060ea996ff3090a5d37266863af23-c1e421b32e286745
 content-disposition: attachment; filename=1.txt
-x-b3-traceid: bf2e1f73302bb811c6408ecea3002cd8
+x-b3-traceid: 2c3060ea996ff3090a5d37266863af23
 x-content-type-options: nosniff
 x-webobjects-loadaverage: 0
-x-responding-instance: MZStoreServices:6502570:::
+x-responding-instance: MZStoreServices:6002586:::
 apple-seq: 0.0
 access-control-allow-origin: *
 apple-originating-system: MZStoreServices
 strict-transport-security: max-age=31536000; includeSubDomains
-x-apple-orig-url: https://mzstoreservices-mr.itunes.apple.com/search?term=daft+punk&media=music&entity=song&limit=2
-x-apple-application-site: MR22
-apple-timing-app: 101 ms
-x-apple-application-instance: 6502570
-x-daiquiri-instance: daiquiri:17317002:mr85p00it-hyhk03144801:7987:26HOTFIX41:daiquiri-amp-store-shared-int-001-mr
-x-daiquiri-debug-worker-pid: 32803
-strict-transport-security: max-age=31536000; includeSubDomains
-x-daiquiri-instance: daiquiri:12282002:mr47p00it-qujn07081302:7987:26HOTFIX41:daiquiri-amp-store-l7shared-ext-001-mr
-x-daiquiri-debug-worker-pid: 95339
+x-apple-orig-url: https://mzstoreservices-st.itunes.apple.com/search?term=daft+punk&media=music&entity=song&limit=2
+x-apple-application-site: ST11
+apple-timing-app: 78 ms
+x-apple-application-instance: 6002586
+x-daiquiri-instance: daiquiri:47317008:st44p00it-hyhk15044801:7987:26HOTFIX41:daiquiri-amp-store-shared-int-001-st
+x-daiquiri-debug-worker-pid: 28804
+x-daiquiri-instance: daiquiri:42282007:st53p00it-qujn11032102:7987:26HOTFIX41:daiquiri-amp-store-l7shared-ext-001-st
+x-daiquiri-debug-worker-pid: 44949
 vary: origin
 cache-control: max-age=86400
-date: Mon, 19 Oct 2026 01:38:05 GMT
+date: Mon, 19 Oct 2026 01:43:39 GMT
 content-length: 3069
-x-cache: TCP_MISS from a23-48-200-185.deploy.akamaitechnologies.com (AkamaiGHost/22.6.5-e48a1e600c03e7d517694b5b11b937be) (-)
+x-cache: TCP_MISS from a23-209-83-77.deploy.akamaitechnologies.com (AkamaiGHost/22.6.5-e48a1e600c03e7d517694b5b11b937be) (-)
 x-true-cache-key: /L/itunes.apple.com/search?entity=song&limit=2&media=music&term=daft+punkBrowser vcd=2897
-x-cache-remote: TCP_MISS from a23-73-206-163.deploy.akamaitechnologies.com (AkamaiGHost/22.6.4-888a2d21768272d5e2d80e9762941e76) (-)
+x-cache-remote: TCP_MISS from a23-33-28-212.deploy.akamaitechnologies.com (AkamaiGHost/22.6.5-e48a1e600c03e7d517694b5b11b937be) (-)
 x-apple-partner: origin.0
 
 
@@ -89,36 +88,36 @@ x-apple-partner: origin.0
 HTTP/2 200 
 server: daiquiri/5
 content-type: text/javascript; charset=utf-8
-x-apple-jingle-correlation-key: X2NMFUWLUWGKJ7IDPXUNIR75KY
-x-apple-request-uuid: be9ac2d2-cba5-8ca4-fd03-7de8d447fd56
+x-apple-jingle-correlation-key: 7OCZZR6NP4Z6U3QUXOOGXPEFOQ
+x-apple-request-uuid: fb859cc7-cd7f-33ea-6e14-bb9c6bbc8574
 x-apple-translated-wo-url: /WebObjects/MZStoreServices.woa/ws/wsSearch?term=bohemian+rhapsody&media=music&entity=song&limit=2&urlDesc=
 apple-tk: false
-x-b3-spanid: 068a69be884eea47
-b3: be9ac2d2cba58ca4fd037de8d447fd56-068a69be884eea47
+x-b3-spanid: 609e900e7baf26ec
+b3: fb859cc7cd7f33ea6e14bb9c6bbc8574-609e900e7baf26ec
 content-disposition: attachment; filename=1.txt
-x-b3-traceid: be9ac2d2cba58ca4fd037de8d447fd56
+x-b3-traceid: fb859cc7cd7f33ea6e14bb9c6bbc8574
 x-content-type-options: nosniff
 x-webobjects-loadaverage: 0
-x-responding-instance: MZStoreServices:6001051:::
+x-responding-instance: MZStoreServices:6002749:::
 apple-seq: 0.0
 access-control-allow-origin: *
 apple-originating-system: MZStoreServices
 strict-transport-security: max-age=31536000; includeSubDomains
 x-apple-orig-url: https://mzstoreservices-st.itunes.apple.com/search?term=bohemian+rhapsody&media=music&entity=song&limit=2
 x-apple-application-site: ST11
-apple-timing-app: 66 ms
-x-apple-application-instance: 6001051
-x-daiquiri-instance: daiquiri:47317002:st44p00it-hyhk15114801:7987:26HOTFIX41:daiquiri-amp-store-shared-int-001-st
-x-daiquiri-debug-worker-pid: 27381
-x-daiquiri-instance: daiquiri:42282007:st53p00it-qujn11032102:7987:26HOTFIX41:daiquiri-amp-store-l7shared-ext-001-st
-x-daiquiri-debug-worker-pid: 44939
+apple-timing-app: 67 ms
+x-apple-application-instance: 6002749
+x-daiquiri-instance: daiquiri:47317007:st44p00it-hyhk15024701:7987:26HOTFIX41:daiquiri-amp-store-shared-int-001-st
+x-daiquiri-debug-worker-pid: 5254
+x-daiquiri-instance: daiquiri:42282001:st53p00it-qujn15040102:7987:26HOTFIX41:daiquiri-amp-store-l7shared-ext-001-st
+x-daiquiri-debug-worker-pid: 46069
 vary: origin
 cache-control: max-age=86400
-date: Mon, 19 Oct 2026 01:38:05 GMT
+date: Mon, 19 Oct 2026 01:43:39 GMT
 content-length: 1587
-x-cache: TCP_MISS from a23-48-200-185.deploy.akamaitechnologies.com (AkamaiGHost/22.6.5-e48a1e600c03e7d517694b5b11b937be) (-)
+x-cache: TCP_MISS from a23-209-83-77.deploy.akamaitechnologies.com (AkamaiGHost/22.6.5-e48a1e600c03e7d517694b5b11b937be) (-)
 x-true-cache-key: /L/itunes.apple.com/search?entity=song&limit=2&media=music&term=bohemian+rhapsodyBrowser vcd=2897
-x-cache-remote: TCP_MISS from a23-73-206-141.deploy.akamaitechnologies.com (AkamaiGHost/22.6.5-e48a1e600c03e7d517694b5b11b937be) (-)
+x-cache-remote: TCP_MISS from a23-33-28-202.deploy.akamaitechnologies.com (AkamaiGHost/22.6.5-e48a1e600c03e7d517694b5b11b937be) (-)
 x-apple-partner: origin.0
 
 
@@ -132,69 +131,69 @@ x-apple-partner: origin.0
 HTTP/2 200 
 server: daiquiri/5
 content-type: text/javascript; charset=utf-8
-x-apple-jingle-correlation-key: XCHN73IJFCMRMYBHRGD6ICWIXY
-x-apple-request-uuid: b88edfed-0928-9916-6027-8987e40ac8be
+x-apple-jingle-correlation-key: VJTZIBNI2MPNZRZEZIL7UYW7YM
+x-apple-request-uuid: aa679405-a8d3-1edc-c724-ca17fa62dfc3
 x-apple-translated-wo-url: /WebObjects/MZStoreServices.woa/ws/wsSearch?term=one+more+time&media=music&entity=song&limit=1&callback=__cb1&urlDesc=
 apple-tk: false
-x-b3-spanid: 7abaadad8ca89215
-b3: b88edfed0928991660278987e40ac8be-7abaadad8ca89215
+x-b3-spanid: 2187d0a4f75052a4
+b3: aa679405a8d31edcc724ca17fa62dfc3-2187d0a4f75052a4
 content-disposition: attachment; filename=1.txt
-x-b3-traceid: b88edfed0928991660278987e40ac8be
+x-b3-traceid: aa679405a8d31edcc724ca17fa62dfc3
 x-content-type-options: nosniff
 x-webobjects-loadaverage: 0
-x-responding-instance: MZStoreServices:6501987:::
+x-responding-instance: MZStoreServices:6502481:::
 apple-seq: 0.0
 access-control-allow-origin: *
 apple-originating-system: MZStoreServices
 strict-transport-security: max-age=31536000; includeSubDomains
 x-apple-orig-url: https://mzstoreservices-mr.itunes.apple.com/search?term=one+more+time&media=music&entity=song&limit=1&callback=__cb1
 x-apple-application-site: MR22
-apple-timing-app: 146 ms
-x-apple-application-instance: 6501987
+apple-timing-app: 138 ms
+x-apple-application-instance: 6502481
 x-daiquiri-instance: daiquiri:17317004:mr85p00it-hyhk04154601:7987:26HOTFIX41:daiquiri-amp-store-shared-int-001-mr
-x-daiquiri-debug-worker-pid: 25781
-x-daiquiri-instance: daiquiri:12282006:mr47p00it-qujn05121902:7987:26HOTFIX41:daiquiri-amp-store-l7shared-ext-001-mr
-x-daiquiri-debug-worker-pid: 9318
+x-daiquiri-debug-worker-pid: 25799
+x-daiquiri-instance: daiquiri:12282007:mr47p00it-qujn07093001:7987:26HOTFIX41:daiquiri-amp-store-l7shared-ext-001-mr
+x-daiquiri-debug-worker-pid: 91152
 cache-control: max-age=86400
-date: Mon, 19 Oct 2026 01:38:06 GMT
+date: Mon, 19 Oct 2026 01:43:39 GMT
 content-length: 1522
-x-cache: TCP_MISS from a23-48-200-185.deploy.akamaitechnologies.com (AkamaiGHost/22.6.5-e48a1e600c03e7d517694b5b11b937be) (-)
+x-cache: TCP_MISS from a23-209-83-77.deploy.akamaitechnologies.com (AkamaiGHost/22.6.5-e48a1e600c03e7d517694b5b11b937be) (-)
 x-true-cache-key: /L/itunes.apple.com/search?callback=__cb1&entity=song&limit=1&media=music&term=one+more+timeBrowser vcd=2897
-x-cache-remote: TCP_MISS from a23-204-137-185.deploy.akamaitechnologies.com (AkamaiGHost/22.6.5-e48a1e60
+x-cache-remote: TCP_MISS from a23-57-66-80.deploy.akamaitechnologies.com (AkamaiGHost/22.6.5-e48a1e600c0
 === Apple plain, Origin example.com (is the CORS header cached across origins?)
 HTTP/2 200 
 server: daiquiri/5
 content-type: text/javascript; charset=utf-8
-x-apple-jingle-correlation-key: 4TQLWVL6ZD5USDT5V56B2PC7WQ
-x-apple-request-uuid: e4e0bb55-7ec8-fb49-0e7d-af7c1d3c5fb4
+x-apple-jingle-correlation-key: FBVBDPPEU7RIY6NIW7UUN7TIMQ
+x-apple-request-uuid: 286a11bd-e4a7-e28c-79a8-b7e946fe6864
 x-apple-translated-wo-url: /WebObjects/MZStoreServices.woa/ws/wsSearch?term=one+more+time&media=music&entity=song&limit=2&urlDesc=
 apple-tk: false
-x-b3-spanid: 9d6a0feaf4e0b3fc
-b3: e4e0bb557ec8fb490e7daf7c1d3c5fb4-9d6a0feaf4e0b3fc
+x-b3-spanid: a06a2374bf726c5d
+b3: 286a11bde4a7e28c79a8b7e946fe6864-a06a2374bf726c5d
 content-disposition: attachment; filename=1.txt
-x-b3-traceid: e4e0bb557ec8fb490e7daf7c1d3c5fb4
+x-b3-traceid: 286a11bde4a7e28c79a8b7e946fe6864
 x-content-type-options: nosniff
 x-webobjects-loadaverage: 0
-x-responding-instance: MZStoreServices:6002681:::
+x-responding-instance: MZStoreServices:6502184:::
 apple-seq: 0.0
 access-control-allow-origin: *
 apple-originating-system: MZStoreServices
 strict-transport-security: max-age=31536000; includeSubDomains
-x-apple-orig-url: https://mzstoreservices-st.itunes.apple.com/search?term=one+more+time&media=music&entity=song&limit=2
-x-apple-application-site: ST11
-apple-timing-app: 131 ms
-x-apple-application-instance: 6002681
-x-daiquiri-instance: daiquiri:47317009:st44p00it-hyhk15074901:7987:26HOTFIX41:daiquiri-amp-store-shared-int-001-st
-x-daiquiri-debug-worker-pid: 29847
-x-daiquiri-instance: daiquiri:42282004:st53p00it-qujn12050502:7987:26HOTFIX41:daiquiri-amp-store-l7shared-ext-001-st
-x-daiquiri-debug-worker-pid: 80530
+x-apple-orig-url: https://mzstoreservices-mr.itunes.apple.com/search?term=one+more+time&media=music&entity=song&limit=2
+x-apple-application-site: MR22
+apple-timing-app: 151 ms
+x-apple-application-instance: 6502184
+x-daiquiri-instance: daiquiri:17317009:mr36p00it-hyhk07154701:7987:26HOTFIX41:daiquiri-amp-store-shared-int-001-mr
+x-daiquiri-debug-worker-pid: 25892
+x-daiquiri-instance: daiquiri:12282005:mr47p00it-qujn02122302:7987:26HOTFIX41:daiquiri-amp-store-l7shared-ext-001-mr
+x-daiquiri-debug-worker-pid: 15258
 vary: origin
-cache-control: max-age=86400
-date: Mon, 19 Oct 2026 01:38:06 GMT
+cache-control: max-age=86399
+date: Mon, 19 Oct 2026 01:43:40 GMT
 content-length: 3076
-x-cache: TCP_MISS from a23-48-200-185.deploy.akamaitechnologies.com (AkamaiGHost/22.6.5-e48a1e600c03e7d517694b5b11b937be) (-)
+x-cache: TCP_MISS from a23-209-83-77.deploy.akamaitechnologies.com (AkamaiGHost/22.6.5-e48a1e600c03e7d517694b5b11b937be) (-)
 x-true-cache-key: /L/itunes.apple.com/search?entity=song&limit=2&media=music&term=one+more+timeBrowser vcd=2897
-x-cache-remote: TCP_MISS from a23-220-106-88.deploy.akamaitechnologies.com (AkamaiGHost/22.6.5-e48a1e600c03e7d517694b5b11b937be) (-)
+x-cache-remote: TCP_MISS from a23-192-164-22.deploy.akamaitechnologies.com (AkamaiGHost/22.6.5-e48a1e600c03e7d517694b5b11b937be) (-)
 x-apple-partner: origin.0
 
 === Deezer plain
@@ -206,16 +205,16 @@ access-control-allow-credentials: true
 access-control-expose-headers: Location
 access-control-max-age: 86400
 p3p: policyref="/w3c/p3p.xml" CP="IDC DSP COR CURa ADMa OUR IND PHY ONL COM STA"
-x-host: dzr-web-175
+x-host: dzr-web-109
 x-content-type-options: nosniff
 content-type: application/json; charset=utf-8
 strict-transport-security: max-age=31536000; includeSubDomains
-date: Mon, 19 Oct 2026 01:38:06 GMT
+date: Mon, 19 Oct 2026 01:43:40 GMT
 content-length: 2175
-set-cookie: dzr_uniq_id=dzr_uniq_id_fr091c227e8011ff1fda56aac8fe8c56b0e85025; expires=Sat, 17 Apr 2027 01:38:06 GMT; Max-Age=15552000; path=/; domain=.deezer.com; secure; SameSite=None
+set-cookie: dzr_uniq_id=dzr_uniq_id_fr720643fe522caeed30ea23943a168b32b55cd7; expires=Sat, 17 Apr 2027 01:43:40 GMT; Max-Age=15552000; path=/; domain=.deezer.com; secure; SameSite=None
 x-org: FR
-set-cookie: _abck=67B11C3E261963FA8AB038EC299F744E~-1~YAAQiMgwF9uuzzqhAQAAGw7PURC9zVH1RY+drrLu/HURVCmHcuOf0YBr4tdfMklFRQtB4JFFTIcqR2yklzVVixfSVb1b4U3ALvoPus/Nl/3DTs7uH905rubvEzxbx8uPDbdkhFBSAsF9QJxxFudLZnt7aP/nkZTO9mj6cVYVLMPZUfLcRfhfnIsNKXBqqDtkN6phC5BqNq+yEfaDcwk05OeiNXh01UoYc5EmAbxKhLBqB3JVc4iGX1Z7mQDbPsps6apn9zRuE7Ny2RbTHugZRfivya6IWES6Maeo4+5JTWOE4DyTZjv7dOIwWMQRt2K/V6ORUqKFfXdqQLodjSEqxAy83F5IDBwUBtTqeMtCqU/xArMEsScvOMDstDeEhaKFj6vhoIsMtbyNVpxTPERaZfv3DvpHS15RiwcCWk/cYcQIn8Qm8VvW0fEhpgezS4GhCIv4HUE=~-1~-1~-1~-1~-1; Domain=.deezer.com; Path=/; Expires=Tue, 19 Oct 2027 01:38:06 GMT; Max-Age=31536000; Secure
-set-cookie: bm_sz=89E05D07BE40B09AD8DE1589F1B678AD~YAAQiMgwF9yu
+set-cookie: _abck=020A049639BFAB81E657F2C6BFB5906E~-1~YAAQ8NERAp6jOTKhAQAAMibUURCNPTPq2P+0ZRZq9+KVbdbcU6fRgaptC56KMZu4YG5Cy5h9x84rEQinxjfJBSwp0nHgUd48v/fiTRYoOEdg5RIAkz1OUJNnyAnOtwITj5qDaAYXPEsz0FcnDuh5wwVkC+4qqRm6geQxO+ksXWx/IXvl9bBExpulVA/KgQgP9eOBAQfJwB3jEjLlL+p93a5ljwLuYV0wtavvUF+YYiPMBzcpZII0moaQWHsoEwHGHevYqKqI0DC8vZWjXun9Qkv4X4uQ46t7+/Jahzar81uLc99vs4nWEV4NycEwDbmpnwUQtpzBDTEsOAdOqf81NlYRzlgM0rIWl1o4Gke3CzAqSirou2BSyDNGtcEICVM3p7oDA639vFBaDKv9IGxllHNnK619StbdtFR9hC57uAdrwH5Q/passkkQuBKGY8vTHr07SYg=~-1~-1~-1~-1~-1; Domain=.deezer.com; Path=/; Expires=Tue, 19 Oct 2027 01:43:40 GMT; Max-Age=31536000; Secure
+set-cookie: bm_sz=BC13C924902F837805A252E3B7D08467~YAAQ8NERAp+j
 === Deezer JSONP
 HTTP/2 200 
 server: Apache
@@ -225,12 +224,12 @@ access-control-allow-credentials: true
 access-control-expose-headers: Location
 access-control-max-age: 86400
 p3p: policyref="/w3c/p3p.xml" CP="IDC DSP COR CURa ADMa OUR IND PHY ONL COM STA"
-x-host: dzr-web-15
+x-host: dzr-web-199
 x-content-type-options: nosniff
 content-type: text/javascript; charset=utf-8
 strict-transport-security: max-age=31536000; includeSubDomains
-date: Mon, 19 Oct 2026 01:38:06 GMT
+date: Mon, 19 Oct 2026 01:43:40 GMT
 content-length: 2210
-set-cookie: dzr_uniq_id=dzr_uniq_id_fr299b00c01595ddec6eb57b26e338a0d48f4969; expires=Sat, 17 Apr 2027 01:38:06 GMT; Max-Age=15552000; path=/; domain=.deezer.com; secure; SameSite=None
+set-cookie: dzr_uniq_id=dzr_uniq_id_fr2414293c10b2d401fe6be4f692e1b5ab582792; expires=Sat, 17 Apr 2027 01:43:40 GMT; Max-Age=15552000; path=/; domain=.deezer.com; secure; SameSite=None
 x-org: FR
-set-cookie: _abck=BC980A44E88B4CACF292CC988EB72714~-1~YAAQhMgwF9lww0KhAQAA1g7PURAdVh3
+set-cookie: _abck=ACE97DF1EB57A5CEF9605F9E07963F88~-1~YAAQ8NERAsSjOTKhAQAA/CbUURDUUO
