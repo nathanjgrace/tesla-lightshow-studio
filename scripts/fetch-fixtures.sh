@@ -16,6 +16,17 @@ fetch() {
 fetch "lightshow_example_3_The_Arrival_5_Car/Car%20%231/LightShow/lightshow.fseq" arrival-car1.fseq
 fetch "lightshow_example_5_Cyber_Symphony_4_Car/Car%20%231/LightShow/lightshow.fseq" cyber-symphony-car1.fseq
 fetch "lightshow_example_4_Ready_for_Assault_8_Car/Car%20%231/LightShow/lightshow.fseq" ready-for-assault-car1.fseq
+# Elevator Music's song and show, to check beat tracking against Tesla's own choreography.
+if [ ! -f fixtures/elevator.wav ] || [ ! -f fixtures/elevator.fseq ]; then
+  echo "fetching fixtures/elevator.wav and elevator.fseq"
+  tmp="$(mktemp)"
+  curl -sSfL "$BASE/lightshow_example_1_elevator_music.zip" -o "$tmp"
+  unzip -p "$tmp" "lightshow_example_1_elevator_music/lightshow.wav" > fixtures/elevator.wav
+  unzip -p "$tmp" "lightshow_example_1_elevator_music/lightshow.fseq" > fixtures/elevator.fseq
+  rm -f "$tmp"
+else
+  echo "have fixtures/elevator.wav and elevator.fseq"
+fi
 # Tesla's xLights layout: where each channel sits on its 3D Model S and Cybertruck.
 if [ ! -f fixtures/xlights_rgbeffects.xml ]; then
   echo "fetching fixtures/xlights_rgbeffects.xml"
