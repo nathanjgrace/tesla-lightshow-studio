@@ -4,3 +4,4 @@ dist/
 fixtures/
 *.log
 .DS_Store
+.claude/worktrees/

@@ -580,6 +580,12 @@ button.export {
   color: var(--fg);
 }
 
+.camera-presets button.icon-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+
 .preset-gap {
   width: 1px;
   margin: 4px 4px;

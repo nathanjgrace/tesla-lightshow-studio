@@ -1,8 +1,26 @@
+import { Rotate3d } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import type { Simulation } from '../core/simulate';
 import type { BodyStyle } from '../core/vehicles';
 import { CAMERA_PRESETS, CarScene, type Finish } from './car/CarScene';
 import type { Playback } from './playback';
+
+function storedFlag(key: string, fallback: boolean): boolean {
+  try {
+    const v = localStorage.getItem(key);
+    return v === null ? fallback : v === '1';
+  } catch {
+    return fallback;
+  }
+}
+
+function storeFlag(key: string, on: boolean): void {
+  try {
+    localStorage.setItem(key, on ? '1' : '0');
+  } catch {
+    // Not remembered in private browsing; that's fine.
+  }
+}
 
 function storedFinish(): Finish {
   try {
@@ -17,6 +35,19 @@ export function CarView({ sim, body, playback }: { sim: Simulation | undefined; 
   const [scene, setScene] = useState<CarScene>();
   const [error, setError] = useState<string>();
   const [finish, setFinish] = useState<Finish>(storedFinish);
+  const [spin, setSpin] = useState(() => storedFlag('autoRotate', true));
+
+  useEffect(() => {
+    scene?.setAutoRotate(spin);
+    storeFlag('autoRotate', spin);
+  }, [scene, spin]);
+
+  useEffect(() => {
+    if (!scene) return;
+    const update = () => scene.setPlaying(playback.isPlaying);
+    update();
+    return playback.subscribeState(update);
+  }, [scene, playback]);
 
   useEffect(() => {
     scene?.setFinish(finish);
@@ -63,8 +94,25 @@ export function CarView({ sim, body, playback }: { sim: Simulation | undefined; 
           {finish === 'matte' ? 'Reflections: off' : 'Reflections: on'}
         </button>
         <span className="preset-gap" />
+        <button
+          className={`icon-toggle${spin ? ' on' : ''}`}
+          onClick={() => setSpin(!spin)}
+          aria-pressed={spin}
+          title={spin ? 'Auto-rotate is on: the camera slowly circles the car while the show plays' : 'Auto-rotate is off'}
+        >
+          <Rotate3d size={14} />
+          Auto-rotate
+        </button>
+        <span className="preset-gap" />
         {CAMERA_PRESETS.map((p) => (
-          <button key={p.name} onClick={() => scene?.flyTo(p)}>
+          <button
+            key={p.name}
+            onClick={() => {
+              // Picking a view means "hold it here".
+              setSpin(false);
+              scene?.flyTo(p);
+            }}
+          >
             {p.name}
           </button>
         ))}

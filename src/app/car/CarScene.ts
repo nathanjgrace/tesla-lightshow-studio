@@ -4,7 +4,6 @@
 
 import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
-import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js';
 import { EffectComposer } from 'three/examples/jsm/postprocessing/EffectComposer.js';
 import { OutputPass } from 'three/examples/jsm/postprocessing/OutputPass.js';
 import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass.js';
@@ -13,6 +12,7 @@ import type { Simulation } from '../../core/simulate';
 import type { BodyStyle } from '../../core/vehicles';
 import { buildBody } from './bodies';
 import { shadowTexture } from './kit';
+import { buildStreet, streetEnvironment, type Street } from './street';
 
 export interface Materials {
   paint: THREE.MeshPhysicalMaterial;
@@ -67,13 +67,13 @@ type FinishSpec = {
 
 const FINISHES: Record<Finish, FinishSpec> = {
   matte: {
-    environment: 0.06,
+    environment: 0.25,
     paint: { metalness: 0.02, roughness: 0.68, clearcoat: 0 },
     glass: { metalness: 0, roughness: 0.5, clearcoat: 0 },
     trim: { metalness: 0.05, roughness: 0.7 },
   },
   glossy: {
-    environment: 0.3,
+    environment: 1,
     paint: { metalness: 0.15, roughness: 0.32, clearcoat: 1, clearcoatRoughness: 0.08 },
     glass: { metalness: 0.4, roughness: 0.04, clearcoat: 1 },
     trim: { metalness: 0.5, roughness: 0.25 },
@@ -125,6 +125,11 @@ export class CarScene {
   private userMovedCamera = false;
   private size = { w: 0, h: 0 };
   private cameraTween: { from: THREE.Vector3; to: THREE.Vector3; start: number } | undefined;
+  private readonly street: Street;
+  private readonly timer = new THREE.Timer();
+  private autoRotate = false;
+  private playing = false;
+  private dragging = false;
 
   private readonly m: Materials = {
     paint: new THREE.MeshPhysicalMaterial({ color: DEFAULT_PAINT }),
@@ -145,7 +150,8 @@ export class CarScene {
     this.scene.background = new THREE.Color('#07090c');
     this.scene.fog = new THREE.Fog('#07090c', 20, 50);
     const pmrem = new THREE.PMREMGenerator(this.renderer);
-    this.scene.environment = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
+    this.scene.environment = pmrem.fromScene(streetEnvironment(), 0.02).texture;
+    pmrem.dispose();
 
     this.controls = new OrbitControls(this.camera, this.renderer.domElement);
     this.controls.target.copy(this.target);
@@ -153,9 +159,16 @@ export class CarScene {
     this.controls.minDistance = 3.5;
     this.controls.maxDistance = 30;
     this.controls.maxPolarAngle = Math.PI * 0.495;
+    this.controls.autoRotateSpeed = 0.75;
     this.controls.addEventListener('start', () => {
       this.cameraTween = undefined;
       this.userMovedCamera = true;
+      this.dragging = true;
+      this.updateAutoRotate();
+    });
+    this.controls.addEventListener('end', () => {
+      this.dragging = false;
+      this.updateAutoRotate();
     });
 
     this.scene.add(new THREE.HemisphereLight('#8a9ab8', '#121212', 0.55));
@@ -166,12 +179,7 @@ export class CarScene {
     rim.position.set(-6, 3, -6);
     this.scene.add(rim);
 
-    const ground = new THREE.Mesh(
-      new THREE.CircleGeometry(60, 64),
-      new THREE.MeshStandardMaterial({ color: '#1a1d22', roughness: 0.9 }),
-    );
-    ground.rotation.x = -Math.PI / 2;
-    this.scene.add(ground);
+    this.street = buildStreet(this.scene);
     const shadow = new THREE.Mesh(
       new THREE.PlaneGeometry(6, 2.5),
       new THREE.MeshBasicMaterial({ map: shadowTexture(), transparent: true, depthWrite: false }),
@@ -193,8 +201,9 @@ export class CarScene {
       this.raf = requestAnimationFrame(loop);
       // Cheap per-frame size check; resize observers can miss layout changes.
       if (this.container.clientWidth !== this.size.w || this.container.clientHeight !== this.size.h) this.resize();
+      this.timer.update();
       this.tickCamera();
-      this.controls.update();
+      this.controls.update(this.timer.getDelta());
       this.composer.render();
     };
     loop();
@@ -254,6 +263,7 @@ export class CarScene {
     // never push its container's layout around.
     this.renderer.setSize(w, h, false);
     this.composer.setSize(w, h);
+    this.street.setSize(w * this.renderer.getPixelRatio(), h * this.renderer.getPixelRatio());
     this.bloom.setSize(w, h);
     this.camera.aspect = w / h;
     this.camera.updateProjectionMatrix();
@@ -284,6 +294,27 @@ export class CarScene {
     for (const mat of [this.m.paint, this.m.glass, this.m.sideGlass, this.m.trim]) mat.needsUpdate = true;
   }
 
+  /** Slowly circles the car while the show plays (paused while the user drags). */
+  setAutoRotate(on: boolean): void {
+    this.autoRotate = on;
+    this.updateAutoRotate();
+  }
+
+  setPlaying(playing: boolean): void {
+    this.playing = playing;
+    this.updateAutoRotate();
+  }
+
+  private updateAutoRotate(): void {
+    const on = this.autoRotate && this.playing && !this.dragging;
+    this.controls.autoRotate = on;
+    // Once it has turned, a resize shouldn't snap the camera back.
+    if (on) {
+      this.userMovedCamera = true;
+      this.cameraTween = undefined;
+    }
+  }
+
   flyTo(preset: CameraPreset): void {
     this.userMovedCamera = true;
     this.cameraTween = { from: this.camera.position.clone(), to: this.presetPosition(preset), start: performance.now() };
@@ -291,6 +322,8 @@ export class CarScene {
 
   dispose(): void {
     cancelAnimationFrame(this.raf);
+    this.street.dispose();
+    this.timer.dispose();
     this.controls.dispose();
     this.renderer.dispose();
     this.renderer.domElement.remove();
