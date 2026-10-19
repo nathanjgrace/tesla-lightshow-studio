@@ -37,13 +37,18 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-      - name: Real browsers against the live site
+      - name: Install Playwright outside the project
         run: |
-          npm init -y >/dev/null
-          npm i playwright@1 >/dev/null 2>&1
+          mkdir -p /tmp/pw && cd /tmp/pw && npm init -y >/dev/null && npm i playwright@1 >/dev/null 2>&1
           npx playwright install --with-deps chromium webkit >/dev/null 2>&1
-          node diag/browser.mjs > diag/out/browser.txt 2>&1 || true
-          mv diag/*.png diag/out/ || true
+      - name: Song search scenarios against a local build of this branch
+        run: |
+          npm ci
+          npm run build
+          (npx vite preview --port 4173 --strictPort > /dev/null 2>&1 &)
+          sleep 3
+          cp diag/scenarios.mjs /tmp/pw/
+          node /tmp/pw/scenarios.mjs > diag/out/scenarios.txt 2>&1 || true
       - name: Commit results
         run: |
           git config user.name "diag-bot"
