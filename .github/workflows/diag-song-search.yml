@@ -31,6 +31,9 @@ jobs:
           echo "=== Deezer JSONP"
           curl -sS -m 20 -D - -A "Mozilla/5.0 (Macintosh)" "https://api.deezer.com/search?q=one%20more%20time&limit=1&output=jsonp&callback=__cb2" | head -c 900; echo
           } > diag/out/curl.txt 2>&1
+          curl -sS -m 20 -A "Mozilla/5.0 (Macintosh)" "https://api.deezer.com/search?q=one%20more%20time%20daft%20punk&limit=3" > diag/out/deezer.json
+          curl -sS -m 20 -A "Mozilla/5.0 (Macintosh)" "https://api.deezer.com/search?q=one%20more%20time%20daft%20punk&limit=1&output=jsonp&callback=__cb2" > diag/out/deezer.jsonp.txt
+          curl -sS -m 20 -D diag/out/deezer-preview-headers.txt -o /dev/null -r 0-1000 "$(python3 -c "import json;print(json.load(open('diag/out/deezer.json'))['data'][0]['preview'])")" || true
       - uses: actions/setup-node@v4
         with:
           node-version: 22
