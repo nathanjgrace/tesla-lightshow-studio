@@ -121,6 +121,9 @@ interface LightPart {
 }
 
 const DEFAULT_PAINT = '#e9eaec';
+/** About 80 seconds per lap. */
+const AUTO_ROTATE_SPEED = (2 * Math.PI) / 80;
+const UP = new THREE.Vector3(0, 1, 0);
 
 export class CarScene {
   readonly renderer: THREE.WebGLRenderer;
@@ -147,6 +150,8 @@ export class CarScene {
   private readonly street: Street;
   private readonly timer = new THREE.Timer();
   private autoRotate = false;
+  /** Current orbit speed (rad/s), eased toward the target so it starts and stops smoothly. */
+  private spin = 0;
   private playing = false;
   private dragging = false;
   private reflections = false;
@@ -181,7 +186,6 @@ export class CarScene {
     this.controls.minDistance = 3.5;
     this.controls.maxDistance = 30;
     this.controls.maxPolarAngle = Math.PI * 0.495;
-    this.controls.autoRotateSpeed = 0.75;
     this.controls.addEventListener('start', () => {
       this.cameraTween = undefined;
       this.userMovedCamera = true;
@@ -223,8 +227,10 @@ export class CarScene {
       // Cheap per-frame size check; resize observers can miss layout changes.
       if (this.container.clientWidth !== this.size.w || this.container.clientHeight !== this.size.h) this.resize();
       this.timer.update();
+      const dt = Math.min(0.1, this.timer.getDelta());
       this.tickCamera();
-      this.controls.update(this.timer.getDelta());
+      this.tickSpin(dt);
+      this.controls.update(dt);
       this.composer.render();
     };
     loop();
@@ -361,16 +367,32 @@ export class CarScene {
   }
 
   private updateAutoRotate(): void {
-    const on = this.autoRotate && this.playing && !this.dragging;
-    this.controls.autoRotate = on;
     // Once it has turned, a resize shouldn't snap the camera back.
-    if (on) {
+    if (this.autoRotate && this.playing && !this.dragging) {
       this.userMovedCamera = true;
       this.cameraTween = undefined;
     }
   }
 
+  /**
+   * Orbits the camera directly rather than through OrbitControls' own
+   * auto-rotate, whose damping momentum kept the camera drifting after a
+   * camera view was picked.
+   */
+  private tickSpin(dt: number): void {
+    const target = this.autoRotate && this.playing && !this.dragging && !this.cameraTween ? AUTO_ROTATE_SPEED : 0;
+    this.spin += (target - this.spin) * Math.min(1, dt * 2.5);
+    if (Math.abs(this.spin) < 1e-4) {
+      this.spin = 0;
+      return;
+    }
+    const offset = this.camera.position.clone().sub(this.controls.target);
+    offset.applyAxisAngle(UP, this.spin * dt);
+    this.camera.position.copy(this.controls.target).add(offset);
+  }
+
   flyTo(preset: CameraPreset): void {
+    this.spin = 0;
     this.userMovedCamera = true;
     this.cameraTween = { from: this.camera.position.clone(), to: this.presetPosition(preset), start: performance.now() };
   }

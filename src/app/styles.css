@@ -1176,6 +1176,22 @@ button.choice {
   }
 }
 
+/* In a narrow car pane the paint button shrinks to its swatch so it clears the title. */
+@container (max-width: 560px) {
+  .paint-trigger {
+    padding: 0 6px;
+  }
+
+  .paint-trigger .truncate,
+  .paint-trigger .menu-chevron {
+    display: none;
+  }
+
+  .paint-panel {
+    width: min(316px, calc(100cqw - 24px));
+  }
+}
+
 /* Drag and drop */
 
 .drop-overlay {
