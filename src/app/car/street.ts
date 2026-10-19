@@ -259,7 +259,9 @@ export function streetEnvironment(): THREE.Scene {
   }
   sky.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
   env.add(new THREE.Mesh(sky, new THREE.MeshBasicMaterial({ vertexColors: true, side: THREE.BackSide })));
-  const lamp = new THREE.MeshBasicMaterial({ color: LAMP_COLOR.clone().multiplyScalar(6) });
+  // Large and dim: they should read as a soft glow on glossy paint, never
+  // as a point of light that looks like part of the show.
+  const lamp = new THREE.MeshBasicMaterial({ color: LAMP_COLOR.clone().multiplyScalar(0.5) });
   for (const [x, z, s] of [
     [-20, -8, 1],
     [22, -8, 1],
@@ -267,7 +269,7 @@ export function streetEnvironment(): THREE.Scene {
     [30, 18, 0.6],
     [-35, 12, 0.6],
   ] as const) {
-    const m = new THREE.Mesh(new THREE.BoxGeometry(1.2 * s, 0.25 * s, 0.6 * s), lamp);
+    const m = new THREE.Mesh(new THREE.BoxGeometry(6 * s, 1.5 * s, 4 * s), lamp);
     m.position.set(x, 9, z);
     env.add(m);
   }

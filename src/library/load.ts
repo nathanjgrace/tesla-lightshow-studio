@@ -67,7 +67,7 @@ function encodePath(path: string): string {
   return path.split('/').map(encodeURIComponent).join('/');
 }
 
-async function fetchBytes(url: string, onProgress?: ProgressFn): Promise<Uint8Array> {
+export async function fetchBytes(url: string, onProgress?: ProgressFn): Promise<Uint8Array> {
   const response = await fetch(url);
   if (!response.ok) throw new Error(`Download failed (${response.status}): ${url}`);
   const total = Number(response.headers.get('content-length')) || 0;

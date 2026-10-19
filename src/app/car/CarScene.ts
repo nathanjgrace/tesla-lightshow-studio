@@ -8,14 +8,22 @@ import { EffectComposer } from 'three/examples/jsm/postprocessing/EffectComposer
 import { OutputPass } from 'three/examples/jsm/postprocessing/OutputPass.js';
 import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass.js';
 import { UnrealBloomPass } from 'three/examples/jsm/postprocessing/UnrealBloomPass.js';
+import type { PaintFinish } from '../../core/paint';
 import type { Simulation } from '../../core/simulate';
 import type { BodyStyle } from '../../core/vehicles';
 import { buildBody } from './bodies';
+import { buildTeslaBody } from './meshBody';
+import type { TeslaAsset } from './teslaAssets';
 import { shadowTexture } from './kit';
 import { buildStreet, streetEnvironment, type Street } from './street';
 
 export interface Materials {
   paint: THREE.MeshPhysicalMaterial;
+  /**
+   * Paint for Tesla's own meshes: its texture is a red paint bake, which this
+   * reads as shading under the chosen color (see paintFromBake).
+   */
+  meshPaint: THREE.MeshPhysicalMaterial;
   glass: THREE.MeshPhysicalMaterial;
   sideGlass: THREE.MeshPhysicalMaterial;
   /** Matte paint for small parts that would flare under bloom. */
@@ -39,6 +47,8 @@ export interface Builder {
     position: [number, number, number],
     gain?: number,
   ): THREE.Mesh;
+  /** Registers an existing mesh (with its own material) as a lamp. */
+  lightMesh(mesh: THREE.Mesh, ids: string[], color: THREE.Color, gain?: number): void;
   closure(id: string, apply: (position: number, dancing: boolean, timeS: number) => void): void;
   beam(ids: string[], light: THREE.Light, max: number): void;
 }
@@ -50,34 +60,42 @@ export interface BuiltBody {
   halfWidth: number;
   /** Paint color for this model's default look. */
   paint?: string;
+  /** Brightness of the cabin glow from the center display (default 6). */
+  cabinGain?: number;
 }
 
 /**
- * Matte keeps the body from mirroring the virtual studio lights, which can be
- * mistaken for light show effects; glossy looks closer to real paint.
+ * Reflections of the (dim, night-street) environment. Off by default: bright
+ * reflections on the body can be mistaken for light show effects.
  */
-export type Finish = 'matte' | 'glossy';
-
-type FinishSpec = {
+type ReflectionSpec = {
   environment: number;
-  paint: Partial<THREE.MeshPhysicalMaterialParameters>;
   glass: Partial<THREE.MeshPhysicalMaterialParameters>;
   trim: Partial<THREE.MeshStandardMaterialParameters>;
 };
 
-const FINISHES: Record<Finish, FinishSpec> = {
-  matte: {
+const REFLECTIONS: Record<'on' | 'off', ReflectionSpec> = {
+  off: {
     environment: 0.25,
-    paint: { metalness: 0.02, roughness: 0.68, clearcoat: 0 },
     glass: { metalness: 0, roughness: 0.5, clearcoat: 0 },
     trim: { metalness: 0.05, roughness: 0.7 },
   },
-  glossy: {
+  on: {
     environment: 1,
-    paint: { metalness: 0.15, roughness: 0.32, clearcoat: 1, clearcoatRoughness: 0.08 },
-    glass: { metalness: 0.4, roughness: 0.04, clearcoat: 1 },
-    trim: { metalness: 0.5, roughness: 0.25 },
+    // Not mirror-smooth: a pin-sharp highlight of the moon or a street lamp
+    // blooms into a dot that looks like a light.
+    glass: { metalness: 0.4, roughness: 0.22, clearcoat: 0.6, clearcoatRoughness: 0.25 },
+    trim: { metalness: 0.5, roughness: 0.38 },
   },
+};
+
+const PAINT_FINISHES: Record<PaintFinish, Partial<THREE.MeshPhysicalMaterialParameters>> = {
+  gloss: { metalness: 0, roughness: 0.4, clearcoat: 1, clearcoatRoughness: 0.06 },
+  metallic: { metalness: 0.45, roughness: 0.38, clearcoat: 1, clearcoatRoughness: 0.05 },
+  pearl: { metalness: 0.15, roughness: 0.32, clearcoat: 1, clearcoatRoughness: 0.05 },
+  satin: { metalness: 0.1, roughness: 0.58, clearcoat: 0.3, clearcoatRoughness: 0.45 },
+  matte: { metalness: 0, roughness: 0.88, clearcoat: 0 },
+  stainless: { metalness: 0.8, roughness: 0.4, clearcoat: 0 },
 };
 
 export interface CameraPreset {
@@ -130,9 +148,12 @@ export class CarScene {
   private autoRotate = false;
   private playing = false;
   private dragging = false;
+  private reflections = false;
+  private paint: { hex: string; finish: PaintFinish } | undefined;
 
   private readonly m: Materials = {
     paint: new THREE.MeshPhysicalMaterial({ color: DEFAULT_PAINT }),
+    meshPaint: paintFromBake(new THREE.MeshPhysicalMaterial({ color: DEFAULT_PAINT })),
     glass: new THREE.MeshPhysicalMaterial({ color: '#06080b' }),
     sideGlass: new THREE.MeshPhysicalMaterial({ color: '#06080b', transparent: true, opacity: 0.9 }),
     smallPaint: new THREE.MeshStandardMaterial({ color: '#d9dadc', roughness: 0.55 }),
@@ -171,13 +192,12 @@ export class CarScene {
       this.updateAutoRotate();
     });
 
-    this.scene.add(new THREE.HemisphereLight('#8a9ab8', '#121212', 0.55));
-    const moon = new THREE.DirectionalLight('#b8c8ff', 0.7);
+    // Night: a soft sky fill and a high moon. No low rim light: from the
+    // default views its highlight on glossy glass looked like a lamp.
+    this.scene.add(new THREE.HemisphereLight('#8f9cb6', '#151515', 0.95));
+    const moon = new THREE.DirectionalLight('#c4d0ff', 0.95);
     moon.position.set(-4, 8, 5);
     this.scene.add(moon);
-    const rim = new THREE.DirectionalLight('#9fb4ff', 0.45);
-    rim.position.set(-6, 3, -6);
-    this.scene.add(rim);
 
     this.street = buildStreet(this.scene);
     const shadow = new THREE.Mesh(
@@ -194,7 +214,7 @@ export class CarScene {
     this.composer.addPass(this.bloom);
     this.composer.addPass(new OutputPass());
 
-    this.setFinish('matte');
+    this.setReflections(false);
     this.camera.position.copy(this.presetPosition(CAMERA_PRESETS[0]!));
     this.resize();
     const loop = () => {
@@ -209,9 +229,12 @@ export class CarScene {
     loop();
   }
 
-  /** Builds the car for a vehicle; does nothing if that body is already shown. */
-  setBody(style: BodyStyle): void {
-    const key = JSON.stringify(style);
+  /**
+   * Builds the car for a vehicle, from Tesla's own model when one is given;
+   * does nothing if that body is already shown.
+   */
+  setBody(style: BodyStyle, asset?: TeslaAsset): void {
+    const key = JSON.stringify(style) + (asset ? `|${asset.model}` : '');
     if (key === this.bodyKey) return;
     this.bodyKey = key;
     if (this.car) {
@@ -242,11 +265,14 @@ export class CarScene {
         this.lights.push({ ids, material, color, gain });
         return mesh;
       },
+      lightMesh: (mesh, ids, color, gain = 5) => {
+        this.lights.push({ ids, material: mesh.material as THREE.MeshStandardMaterial, color, gain });
+      },
       closure: (id, apply) => this.closures.push({ id, apply }),
       beam: (ids, light, max) => this.beams.push({ ids, light, max }),
     };
-    this.bounds = buildBody(builder, style);
-    this.m.paint.color.set(this.bounds.paint ?? DEFAULT_PAINT);
+    this.bounds = asset ? buildTeslaBody(builder, asset, style) : buildBody(builder, style);
+    this.applyPaint();
     this.target.set(0, this.bounds.height * 0.46, 0);
     if (!this.userMovedCamera) {
       this.controls.target.copy(this.target);
@@ -283,15 +309,33 @@ export class CarScene {
     this.applyFrame();
   }
 
-  setFinish(finish: Finish): void {
-    const f = FINISHES[finish];
+  setReflections(on: boolean): void {
+    this.reflections = on;
+    const f = REFLECTIONS[on ? 'on' : 'off'];
     this.scene.environmentIntensity = f.environment;
-    this.m.paint.setValues(f.paint);
     this.m.glass.setValues(f.glass);
     this.m.sideGlass.setValues({ metalness: f.glass.metalness ?? 0, roughness: f.glass.roughness ?? 0.5 });
     this.m.trim.setValues(f.trim);
+    this.applyPaint();
+  }
+
+  /** Paints the car; without a choice, each model shows its default color. */
+  setPaint(hex: string, finish: PaintFinish): void {
+    this.paint = { hex, finish };
+    this.applyPaint();
+  }
+
+  private applyPaint(): void {
+    const hex = this.paint?.hex ?? this.bounds.paint ?? DEFAULT_PAINT;
+    const params = { ...PAINT_FINISHES[this.paint?.finish ?? 'pearl'] };
+    // Metal shows mostly what it reflects, so without reflections it would go dark.
+    if (!this.reflections) params.metalness = Math.min(params.metalness ?? 0, 0.3);
+    for (const mat of [this.m.paint, this.m.meshPaint]) {
+      mat.setValues(params);
+      mat.color.set(hex);
+    }
     // Turning clearcoat on or off changes the shader.
-    for (const mat of [this.m.paint, this.m.glass, this.m.sideGlass, this.m.trim]) mat.needsUpdate = true;
+    for (const mat of [this.m.paint, this.m.meshPaint, this.m.glass, this.m.sideGlass, this.m.trim]) mat.needsUpdate = true;
   }
 
   /** Slowly circles the car while the show plays (paused while the user drags). */
@@ -390,6 +434,30 @@ export class CarScene {
     this.m.display.emissive.setRGB(r, g, b);
     this.m.display.emissiveIntensity = 2.5;
     this.cabinLight.color.setRGB(r, g, b);
-    this.cabinLight.intensity = Math.max(r, g, b) * 6;
+    this.cabinLight.intensity = Math.max(r, g, b) * (this.bounds.cabinGain ?? 6);
   }
+}
+
+/**
+ * Recolors Tesla's paint bake. Where the texture is red (paint), its
+ * brightness becomes shading under the material color; everything else in
+ * the texture (trim, rubber, badges) keeps its own color.
+ */
+function paintFromBake(material: THREE.MeshPhysicalMaterial): THREE.MeshPhysicalMaterial {
+  material.userData.paintScale = 1;
+  material.onBeforeCompile = (shader) => {
+    shader.uniforms.paintScale = { get value() { return material.userData.paintScale as number; } };
+    shader.fragmentShader = shader.fragmentShader
+      .replace('#include <common>', '#include <common>\nuniform float paintScale;')
+      .replace(
+        '#include <map_fragment>',
+        `#ifdef USE_MAP
+          vec4 bake = texture2D( map, vMapUv );
+          float paintMask = clamp( ( bake.r - max( bake.g, bake.b ) ) / max( bake.r, 1e-3 ) * 1.6, 0.0, 1.0 );
+          float shade = clamp( bake.r * paintScale, 0.0, 1.0 );
+          diffuseColor.rgb = mix( bake.rgb, diffuseColor.rgb * shade, paintMask );
+        #endif`,
+      );
+  };
+  return material;
 }

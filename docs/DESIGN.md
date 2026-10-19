@@ -150,8 +150,9 @@ audio ──▶ analysis (Worker) ──▶ choreograph(style, profile) ──�
 | **M5 Expert parity** | Layers, value curves, timing tracks, `.xsq` import, shortcuts | |
 | **M6 More cars** | 3D bodies for Model S, 3, Y, Cybertruck (light bars, RGB); per-version and per-trim lights in the preview | ✅ first pass (stylized) |
 | **M7a Multi-car** | Several cars side by side, cross-car sweeps, one file per car | placeholder |
-| **M6a HQ assets** | Licensed or commissioned high-quality 3D models (glTF) per model and version, replacing the code-built bodies; light/closure wiring stays the same | later |
-| **M6b Paint** | Factory paint colors per model and year, plus a Tesla-style custom picker with finish (gloss/matte/metallic) | later, low priority |
+| **M6a HQ assets** | Tesla's own textured Model S and Cybertruck models, with every light and moving part wired from Tesla's xLights layout (§10b). Still to do: high-quality Model 3, X and Y models | ✅ S and Cybertruck; 3/X/Y next |
+| **M6b Paint** | Factory paint colors per model version and year, a custom color with finish (gloss, metallic, satin, matte), and a reflections switch | ✅ first pass |
+| **M6c Scene** | Wet night street (mirror reflections streaked by puddles), slow auto-rotate while playing | ✅ first pass |
 | **M7 Community** | Accounts, cloud projects, share/browse shows, multi-car shows | |
 
 ## 10. Technology choices
@@ -178,7 +179,13 @@ Community shows (xlightshows.io, teslalightshare.io) are a later addition. They 
 
 ## 10b. 3D models
 
-Tesla publishes 3D models only for the Model S and Cybertruck (in its xLights project). The app builds a stylized body for every model in code (`src/app/car/bodies.ts`), sized from published dimensions: Model S, 3, X and Y share one builder with per-model profiles, and the Cybertruck has its own. Each vehicle version carries a `BodyStyle` (in `src/core/vehicles.ts`) for the hardware that differs by version and trim: refreshed slim headlights (2024+ Model 3, 2025+ Model Y), fog lamps, Model Y Premium front and rear light bars, and Cybertruck light bars (individually driven LEDs). Closures are modeled per car: falcon wings and front doors (X), door handles (S), liftgate (S, X, Y), trunk lid (3) and powered frunk (Cybertruck). High-quality licensed models (M6a) can replace the bodies later; the light and closure wiring stays the same.
+Tesla publishes textured 3D models of the Model S and Cybertruck in its xLights project. The app fetches them from Tesla's repo at a pinned commit (never re-hosted), caches them in the browser, and builds a playable car (`src/app/car/teslaAssets.ts`, `meshBody.ts`). Tesla's xLights layout places every channel on these meshes, so each lens triangle is assigned to its channel automatically, and moving parts come from the OBJ groups (Model S) or regions around the layout's closure positions (Cybertruck). The code-built body shows while the 8.6 MB download runs and if it fails. Details, quirks and confidence: `research/03-tesla-3d-models.md`.
+
+For the other models, the app builds a stylized body in code (`src/app/car/bodies.ts`), sized from published dimensions: Model S, 3, X and Y share one builder with per-model profiles, and the Cybertruck has its own. Each vehicle version carries a `BodyStyle` (in `src/core/vehicles.ts`) for the hardware that differs by version and trim: refreshed slim headlights (2024+ Model 3, 2025+ Model Y), fog lamps, Model Y Premium front and rear light bars, and Cybertruck light bars (individually driven LEDs). Closures are modeled per car: falcon wings and front doors (X), door handles (S), liftgate (S, X, Y), trunk lid (3) and powered frunk (Cybertruck). High-quality models of the Model 3, X and Y (licensed or commissioned) can replace these later through the same mesh pipeline: an OBJ or glTF whose lens materials are named, plus channel positions in the same form as Tesla's layout.
+
+**Paint** (`src/core/paint.ts`, `src/app/PaintPicker.tsx`) lists the factory colors each vehicle version was sold in, with years (sources: `research/02-paint-colors.md`), plus a custom color with a finish. The choice is remembered per version and only affects the preview. **Reflections** is off by default: bright reflections on the body can be mistaken for show lights. The night environment is dim and has no point-like highlights for the same reason.
+
+**Scene** (`src/app/car/street.ts`): the car is parked at a curb on a wet street. The road is lit asphalt under a `Reflector` mirror whose shader blurs, streaks and fades reflections by a procedural puddle mask, so the car's lights smear across the road. While a show plays, the camera slowly circles the car (**Auto-rotate**, on by default); picking a camera view turns it off.
 
 ## 10c. Single car first
 

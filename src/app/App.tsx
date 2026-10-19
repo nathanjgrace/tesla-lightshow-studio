@@ -597,11 +597,7 @@ export function App() {
         style={{ gridTemplate: layout === 'side' ? `1fr / ${split}fr 5px ${1 - split}fr` : `${split}fr 5px ${1 - split}fr / 1fr` }}
       >
         <section className="pane car-pane">
-          <CarView sim={sim} body={vehicle.body} playback={playback} />
-          <div className="pane-badge">
-            <span className="pane-badge-title">{vehicle.name}</span>
-            <span>Stylized preview</span>
-          </div>
+          <CarView sim={sim} vehicle={vehicle} playback={playback} />
         </section>
         <div className="splitter" onPointerDown={startDrag} role="separator" aria-orientation={layout === 'side' ? 'vertical' : 'horizontal'} />
         <section className="pane composer">

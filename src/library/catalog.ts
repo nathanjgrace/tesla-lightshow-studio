@@ -9,6 +9,9 @@ export const LIBRARY_BASE: string =
   import.meta.env.VITE_LIBRARY_BASE ??
   `https://raw.githubusercontent.com/teslamotors/light-show/${TESLA_REPO_COMMIT}/examples/`;
 
+/** Root of Tesla's light-show repo (for the xLights project and its 3D models). */
+export const TESLA_REPO_BASE: string = LIBRARY_BASE.replace(/examples\/$/, '');
+
 export type ShowSource =
   /** One zip containing lightshow.fseq and lightshow.wav/.mp3. */
   | { kind: 'zip'; path: string }

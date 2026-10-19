@@ -1,45 +1,53 @@
 import { Rotate3d } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
+import { parsePaintChoice, resolvePaint, type PaintChoice } from '../core/paint';
 import type { Simulation } from '../core/simulate';
-import type { BodyStyle } from '../core/vehicles';
-import { CAMERA_PRESETS, CarScene, type Finish } from './car/CarScene';
+import type { VehicleProfile } from '../core/vehicles';
+import { CAMERA_PRESETS, CarScene } from './car/CarScene';
+import { hasTeslaMesh, loadTeslaAsset, type TeslaAsset } from './car/teslaAssets';
+import { PaintPicker } from './PaintPicker';
 import type { Playback } from './playback';
 
-function storedFlag(key: string, fallback: boolean): boolean {
+function stored(key: string): string | null {
   try {
-    const v = localStorage.getItem(key);
-    return v === null ? fallback : v === '1';
+    return localStorage.getItem(key);
   } catch {
-    return fallback;
+    return null;
   }
 }
 
-function storeFlag(key: string, on: boolean): void {
+function store(key: string, value: string): void {
   try {
-    localStorage.setItem(key, on ? '1' : '0');
+    localStorage.setItem(key, value);
   } catch {
     // Not remembered in private browsing; that's fine.
   }
 }
 
-function storedFinish(): Finish {
-  try {
-    return localStorage.getItem('finish') === 'glossy' ? 'glossy' : 'matte';
-  } catch {
-    return 'matte';
-  }
-}
+const storedFlag = (key: string, fallback: boolean) => {
+  const v = stored(key);
+  return v === null ? fallback : v === '1';
+};
 
-export function CarView({ sim, body, playback }: { sim: Simulation | undefined; body: BodyStyle; playback: Playback }) {
+// Paint is remembered per vehicle version, since each has its own colors.
+const paintKey = (vehicle: VehicleProfile) => `paint:${vehicle.id}`;
+
+type ModelState = { model: string; progress: number; asset?: TeslaAsset; failed?: boolean };
+
+export function CarView({ sim, vehicle, playback }: { sim: Simulation | undefined; vehicle: VehicleProfile; playback: Playback }) {
+  const body = vehicle.body;
   const host = useRef<HTMLDivElement>(null);
   const [scene, setScene] = useState<CarScene>();
   const [error, setError] = useState<string>();
-  const [finish, setFinish] = useState<Finish>(storedFinish);
+  // Older versions stored the reflections toggle as finish=glossy.
+  const [reflections, setReflections] = useState(() => storedFlag('reflections', stored('finish') === 'glossy'));
   const [spin, setSpin] = useState(() => storedFlag('autoRotate', true));
+  const [paints, setPaints] = useState<Record<string, PaintChoice | undefined>>({});
+  const paint = vehicle.id in paints ? paints[vehicle.id] : parsePaintChoice(stored(paintKey(vehicle)));
 
   useEffect(() => {
     scene?.setAutoRotate(spin);
-    storeFlag('autoRotate', spin);
+    store('autoRotate', spin ? '1' : '0');
   }, [scene, spin]);
 
   useEffect(() => {
@@ -50,13 +58,9 @@ export function CarView({ sim, body, playback }: { sim: Simulation | undefined; 
   }, [scene, playback]);
 
   useEffect(() => {
-    scene?.setFinish(finish);
-    try {
-      localStorage.setItem('finish', finish);
-    } catch {
-      // Not remembered in private browsing; that's fine.
-    }
-  }, [scene, finish]);
+    scene?.setReflections(reflections);
+    store('reflections', reflections ? '1' : '0');
+  }, [scene, reflections]);
 
   useEffect(() => {
     const el = host.current!;
@@ -73,7 +77,36 @@ export function CarView({ sim, body, playback }: { sim: Simulation | undefined; 
     return () => s.dispose();
   }, []);
 
-  useEffect(() => scene?.setBody(body), [scene, body]);
+  // Tesla's own 3D model where it publishes one (Model S, Cybertruck); the
+  // code-built body shows while it downloads, and if it can't be loaded.
+  const [hq, setHq] = useState<ModelState>();
+  useEffect(() => {
+    if (!hasTeslaMesh(body.model)) return;
+    let live = true;
+    const model = body.model;
+    setHq({ model, progress: 0 });
+    loadTeslaAsset(model, (progress) => live && setHq({ model, progress }))
+      .then((asset) => live && setHq({ model, progress: 1, asset }))
+      .catch((e: unknown) => {
+        console.warn("Couldn't load Tesla's 3D model", e);
+        if (live) setHq({ model, progress: 1, failed: true });
+      });
+    return () => {
+      live = false;
+    };
+  }, [body.model]);
+  const asset = hq?.model === body.model ? hq.asset : undefined;
+  const loading = hq?.model === body.model && !hq.asset && !hq.failed;
+
+  useEffect(() => scene?.setBody(body, asset), [scene, body, asset]);
+
+  const { hex, finish } = resolvePaint(paint, vehicle.id);
+  useEffect(() => scene?.setPaint(hex, finish), [scene, hex, finish]);
+
+  const choosePaint = (choice: PaintChoice) => {
+    setPaints((p) => ({ ...p, [vehicle.id]: choice }));
+    store(paintKey(vehicle), JSON.stringify(choice));
+  };
 
   useEffect(() => {
     if (!scene) return;
@@ -85,15 +118,18 @@ export function CarView({ sim, body, playback }: { sim: Simulation | undefined; 
     <div className="car-view">
       <div ref={host} className="car-canvas" />
       {error && <p className="pane-message">3D preview isn't available in this browser: {error}</p>}
+      <div className="pane-badge">
+        <span className="pane-badge-title">{vehicle.name}</span>
+        <span>
+          {asset
+            ? "Tesla's 3D model"
+            : loading
+              ? `Loading Tesla's 3D model… ${Math.round((hq?.progress ?? 0) * 100)}%`
+              : 'Stylized preview'}
+        </span>
+      </div>
+      <PaintPicker vehicle={vehicle} choice={paint} onChange={choosePaint} reflections={reflections} onReflections={setReflections} />
       <div className="camera-presets" role="group" aria-label="Camera views">
-        <button
-          className={finish === 'glossy' ? 'on' : ''}
-          onClick={() => setFinish(finish === 'matte' ? 'glossy' : 'matte')}
-          title="Glossy paint reflects the virtual studio lights; matte doesn't, so only real light show effects glow"
-        >
-          {finish === 'matte' ? 'Reflections: off' : 'Reflections: on'}
-        </button>
-        <span className="preset-gap" />
         <button
           className={`icon-toggle${spin ? ' on' : ''}`}
           onClick={() => setSpin(!spin)}
