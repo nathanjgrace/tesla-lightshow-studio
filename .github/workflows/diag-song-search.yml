@@ -1,42 +1,50 @@
 # Temporary: checks how Apple's iTunes Search API (and Deezer's) answer
-# browsers, since the development sandbox can't reach them.
+# browsers, since the development sandbox can't reach them. Results are
+# committed back to this branch under diag/out/.
 name: Diagnose song search
 on:
   push:
     branches: ['diag/**']
+    paths-ignore: ['diag/out/**']
+permissions:
+  contents: write
 jobs:
   diag:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Apple, plain request with an Origin header
+      - name: Probe the APIs with curl
         run: |
+          mkdir -p diag/out
+          {
           for q in "one+more+time" "daft+punk" "bohemian+rhapsody"; do
-            echo "--- $q"
-            curl -sS -D - -o body.json -A "Mozilla/5.0" -H "Origin: https://nathanjgrace.github.io" "https://itunes.apple.com/search?term=$q&media=music&entity=song&limit=2"
-            head -c 300 body.json; echo
+            echo "=== Apple plain, Origin github.io: $q"
+            curl -sS -m 20 -D - -o body.json -A "Mozilla/5.0 (Macintosh)" -H "Origin: https://nathanjgrace.github.io" "https://itunes.apple.com/search?term=$q&media=music&entity=song&limit=2" || echo "curl failed $?"
+            head -c 400 body.json; echo
           done
-      - name: Apple, preflight-free JSONP
-        run: |
-          curl -sS -D - -A "Mozilla/5.0" "https://itunes.apple.com/search?term=one+more+time&media=music&entity=song&limit=1&callback=__cb1" | head -c 1500; echo
-      - name: Apple, from a different origin (is the CORS header cached?)
-        run: |
-          curl -sS -D - -o /dev/null -A "Mozilla/5.0" -H "Origin: https://example.com" "https://itunes.apple.com/search?term=one+more+time&media=music&entity=song&limit=2"
-      - name: Deezer search, plain and JSONP
-        run: |
-          curl -sS -D - -A "Mozilla/5.0" -H "Origin: https://nathanjgrace.github.io" "https://api.deezer.com/search?q=one%20more%20time&limit=1" | head -c 1200; echo
-          curl -sS -D - -A "Mozilla/5.0" "https://api.deezer.com/search?q=one%20more%20time&limit=1&output=jsonp&callback=__cb2" | head -c 800; echo
+          echo "=== Apple JSONP"
+          curl -sS -m 20 -D - -A "Mozilla/5.0 (Macintosh)" "https://itunes.apple.com/search?term=one+more+time&media=music&entity=song&limit=1&callback=__cb1" | head -c 1800; echo
+          echo "=== Apple plain, Origin example.com (is the CORS header cached across origins?)"
+          curl -sS -m 20 -D - -o /dev/null -A "Mozilla/5.0 (Macintosh)" -H "Origin: https://example.com" "https://itunes.apple.com/search?term=one+more+time&media=music&entity=song&limit=2"
+          echo "=== Deezer plain"
+          curl -sS -m 20 -D - -A "Mozilla/5.0 (Macintosh)" -H "Origin: https://nathanjgrace.github.io" "https://api.deezer.com/search?q=one%20more%20time&limit=1" | head -c 1500; echo
+          echo "=== Deezer JSONP"
+          curl -sS -m 20 -D - -A "Mozilla/5.0 (Macintosh)" "https://api.deezer.com/search?q=one%20more%20time&limit=1&output=jsonp&callback=__cb2" | head -c 900; echo
+          } > diag/out/curl.txt 2>&1
       - uses: actions/setup-node@v4
         with:
           node-version: 22
       - name: Real browsers against the live site
         run: |
           npm init -y >/dev/null
-          npm i playwright@1 >/dev/null
-          npx playwright install --with-deps chromium webkit >/dev/null
-          node diag/browser.mjs
-      - uses: actions/upload-artifact@v4
-        if: always()
-        with:
-          name: screenshots
-          path: diag/*.png
+          npm i playwright@1 >/dev/null 2>&1
+          npx playwright install --with-deps chromium webkit >/dev/null 2>&1
+          node diag/browser.mjs > diag/out/browser.txt 2>&1 || true
+          mv diag/*.png diag/out/ || true
+      - name: Commit results
+        run: |
+          git config user.name "diag-bot"
+          git config user.email "diag-bot@users.noreply.github.com"
+          git add diag/out
+          git commit -m "Diagnostic results" || true
+          git push
