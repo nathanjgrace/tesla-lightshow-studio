@@ -234,12 +234,6 @@ export function bestMatch<T extends SongInfo>(results: readonly T[], fileName: s
   return matches.reduce<T | undefined>((best, r) => (!best || off(r) < off(best) ? r : best), undefined);
 }
 
-/** Deezer's advanced search for one song: `artist:"…" track:"…"`. */
-export function deezerTrackQuery(song: Pick<SongInfo, 'title' | 'artist'>): string {
-  const quote = (v: string) => `"${v.replace(/"/g, '')}"`;
-  return `artist:${quote(primaryArtist(song.artist))} track:${quote(coreTitle(song.title))}`;
-}
-
 /**
  * The same recording in another catalog's results: same core title and first
  * artist, the closest length, and the same version tag when the song has one

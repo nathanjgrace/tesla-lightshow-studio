@@ -81,13 +81,6 @@ for (const [engineName, engine] of [['Chromium', chromium], ['WebKit', webkit]])
   }
   await browser.close();
 }
-// What Deezer returns for the lookups the clip feature makes.
-section = 'Deezer lookups';
-for (const q of ['artist:"Daft Punk" track:"One More Time"', 'Daft Punk One More Time']) {
-  const r = await fetch(`https://api.deezer.com/search?q=${encodeURIComponent(q)}&limit=5`).then((x) => x.json()).catch((e) => ({ error: String(e) }));
-  log(`${q} → ${JSON.stringify(r.error ?? (r.data ?? []).map((d) => `${d.artist?.name} – ${d.title} (${d.duration}s)`))}`, true);
-}
-
 // Starting a show from the 30-second clip: an Apple result is matched on
 // Deezer and its MP3 preview downloaded.
 for (const [engineName, engine] of [['Chromium', chromium], ['WebKit', webkit]]) {

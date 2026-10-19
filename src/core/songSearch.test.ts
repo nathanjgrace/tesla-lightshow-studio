@@ -8,7 +8,6 @@ import {
   guessFromFileName,
   matchesFileName,
   deezerSearchUrl,
-  deezerTrackQuery,
   sameSong,
   parseDeezerResults,
   parseItunesResults,
@@ -217,11 +216,6 @@ describe('matching a dropped file', () => {
 describe('matching a song across catalogs', () => {
   const apple = parseItunesResults(ITUNES_SAMPLE)[0]!;
   const deezer = parseDeezerResults(DEEZER_SAMPLE);
-
-  it('builds a Deezer query for one song', () => {
-    expect(deezerTrackQuery({ title: 'One More Time (Radio Edit)', artist: 'Daft Punk & Friends' })).toBe('artist:"Daft Punk" track:"One More Time"');
-    expect(deezerTrackQuery({ title: 'Say "Hi"', artist: 'X' })).toBe('artist:"X" track:"Say Hi"');
-  });
 
   it('finds the same recording, preferring the same version and length', () => {
     expect(sameSong(deezer, apple)?.id).toBe('deezer:3135553');
