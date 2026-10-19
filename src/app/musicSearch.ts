@@ -1,0 +1,142 @@
+// Song search across catalogs: Apple's iTunes Search first, Deezer when Apple
+// can't be reached. Ad blockers, network filters and Apple's rate limit
+// (roughly 20 searches a minute) can each stop one catalog, so a second one
+// on a different domain keeps search working. Results are cached, and a
+// catalog that just failed is skipped for a while instead of retried on every
+// keystroke.
+
+import {
+  deezerSearchUrl,
+  parseDeezerResults,
+  parseItunesResults,
+  searchUrl,
+  SOURCE_NAMES,
+  type SongResult,
+  type SongSource,
+} from '../core/songSearch';
+import { jsonp } from './jsonp';
+
+export type FailureReason = 'blocked' | 'timeout' | 'busy' | 'error';
+
+export interface SourceFailure {
+  source: SongSource;
+  reason: FailureReason;
+  detail: string;
+}
+
+/** Every catalog failed; `failures` says how. */
+export class SongSearchError extends Error {
+  constructor(readonly failures: SourceFailure[]) {
+    super(failures.map((f) => `${SOURCE_NAMES[f.source]}: ${f.detail}`).join('; '));
+  }
+}
+
+const TIMEOUT_MS = 7000;
+/** How long to skip a catalog after it fails, by reason. */
+const PAUSE_MS: Record<FailureReason, number> = { blocked: 5 * 60_000, timeout: 60_000, busy: 60_000, error: 30_000 };
+
+const cache = new Map<string, SongResult[]>();
+const pausedUntil: Record<SongSource, number> = { apple: 0, deezer: 0 };
+/** Set once a plain request to Apple has failed but JSONP worked. */
+let appleNeedsJsonp = false;
+
+class Failure extends Error {
+  constructor(
+    readonly reason: FailureReason,
+    detail: string,
+  ) {
+    super(detail);
+  }
+}
+
+const isAbort = (e: unknown) => e instanceof DOMException && e.name === 'AbortError';
+
+/** Lets the next search try every catalog again (the Retry button). */
+export function resetSongSearch(): void {
+  pausedUntil.apple = 0;
+  pausedUntil.deezer = 0;
+}
+
+export async function searchSongs(term: string, { signal, limit = 8 }: { signal?: AbortSignal; limit?: number } = {}): Promise<SongResult[]> {
+  const key = `${term.trim().toLowerCase()}|${limit}`;
+  const hit = cache.get(key);
+  if (hit) return hit;
+  const failures: SourceFailure[] = [];
+  for (const source of ['apple', 'deezer'] as const) {
+    if (Date.now() < pausedUntil[source]) {
+      failures.push({ source, reason: 'busy', detail: 'skipped after failing a moment ago' });
+      continue;
+    }
+    try {
+      const songs = source === 'apple' ? await searchApple(term, limit, signal) : await searchDeezer(term, limit, signal);
+      cache.set(key, songs);
+      if (cache.size > 200) cache.delete(cache.keys().next().value!);
+      return songs;
+    } catch (e) {
+      if (isAbort(e) || signal?.aborted) throw e;
+      const f = e instanceof Failure ? e : new Failure('error', e instanceof Error ? e.message : String(e));
+      failures.push({ source, reason: f.reason, detail: f.message });
+      pausedUntil[source] = Date.now() + PAUSE_MS[f.reason];
+      console.warn(`Song search: ${SOURCE_NAMES[source]} failed (${f.reason}): ${f.message}`);
+    }
+  }
+  throw new SongSearchError(failures);
+}
+
+async function searchApple(term: string, limit: number, signal: AbortSignal | undefined): Promise<SongResult[]> {
+  if (!appleNeedsJsonp) {
+    let response: Response | undefined;
+    try {
+      response = await fetchWithTimeout(searchUrl(term, { limit }), signal);
+    } catch (e) {
+      if (isAbort(e) && signal?.aborted) throw e;
+      if (isAbort(e)) throw new Failure('timeout', 'no answer within 7 seconds');
+      // A TypeError: blocked by CORS, a content blocker or the network. JSONP
+      // loads differently and sometimes gets through.
+    }
+    if (response) {
+      if (response.status === 403 || response.status === 429 || response.status >= 500) {
+        throw new Failure('busy', `busy or rate-limited (HTTP ${response.status})`);
+      }
+      if (!response.ok) throw new Failure('error', `HTTP ${response.status}`);
+      return parseItunesResults(await response.json());
+    }
+  }
+  const json = await jsonpOrFailure((callback) => searchUrl(term, { limit, callback }), signal);
+  appleNeedsJsonp = true;
+  return parseItunesResults(json);
+}
+
+async function searchDeezer(term: string, limit: number, signal: AbortSignal | undefined): Promise<SongResult[]> {
+  // Deezer sends no CORS headers, so it's JSONP only.
+  const json = await jsonpOrFailure((callback) => deezerSearchUrl(term, { limit, callback }), signal);
+  // Deezer reports errors (like its quota) as a normal response.
+  const error = (json as { error?: { message?: unknown } } | undefined)?.error;
+  if (error) throw new Failure('busy', String(error.message ?? 'error'));
+  return parseDeezerResults(json);
+}
+
+async function jsonpOrFailure(makeUrl: (callback: string) => string, signal: AbortSignal | undefined): Promise<unknown> {
+  try {
+    return await jsonp(makeUrl, { signal, timeoutMs: TIMEOUT_MS });
+  } catch (e) {
+    if (isAbort(e) || signal?.aborted) throw e;
+    const message = e instanceof Error ? e.message : String(e);
+    throw /timed out/i.test(message)
+      ? new Failure('timeout', 'no answer within 7 seconds')
+      : new Failure('blocked', 'blocked by the browser, an extension or the network');
+  }
+}
+
+async function fetchWithTimeout(url: string, signal: AbortSignal | undefined): Promise<Response> {
+  const controller = new AbortController();
+  const onAbort = () => controller.abort(signal?.reason);
+  signal?.addEventListener('abort', onAbort);
+  const timer = setTimeout(() => controller.abort(new DOMException('Timed out', 'AbortError')), TIMEOUT_MS);
+  try {
+    return await fetch(url, { signal: controller.signal });
+  } finally {
+    clearTimeout(timer);
+    signal?.removeEventListener('abort', onAbort);
+  }
+}
