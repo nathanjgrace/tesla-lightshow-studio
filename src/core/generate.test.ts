@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { Analysis, Onset, SectionKind } from './analysis';
 import { CHANNELS_BY_ID } from './channels';
-import { generateShow, type GenerateOptions } from './generate';
+import { generateShow, planSections, type GenerateOptions } from './generate';
 import { blankProject, compileProject, effectFamily } from './project';
 import { validate } from './validate';
 import { VEHICLES, VEHICLES_BY_ID } from './vehicles';
@@ -101,6 +101,20 @@ describe('generateShow', () => {
     const effects = generateShow(song(), VEHICLES_BY_ID.get('cybertruck-2024')!, FRAMES, opts());
     const bars = new Set(effects.filter((e) => e.channel.startsWith('frontLightBar')).map((e) => e.channel));
     expect(bars.size).toBe(60);
+  });
+
+  it('finds a peak in a song whose loudness barely changes', () => {
+    // One long verse, a little louder from 40 s to 60 s.
+    const values = Array.from({ length: 800 }, (_, i) => (i >= 400 && i < 600 ? 0.7 : 0.6));
+    const flat: Analysis = { ...song(), sections: [{ startMs: 0, endMs: 80000, kind: 'verse', energy: 0.6 }], energy: { hopMs: 100, values } };
+    const plan = planSections(flat);
+    expect(plan.map((p) => p.kind)).toEqual(['intro', 'verse', 'chorus', 'verse', 'outro']);
+    const peak = plan.find((p) => p.kind === 'chorus')!;
+    expect(peak.startMs).toBeGreaterThanOrEqual(38000);
+    expect(peak.startMs).toBeLessThanOrEqual(46000);
+    // And the doors get to move.
+    const effects = generateShow(flat, VEHICLES_BY_ID.get('modelX-2021')!, FRAMES, opts());
+    expect(effects.some((e) => e.channel === 'leftFalconDoor' && e.kind === 'open')).toBe(true);
   });
 
   it('copes with a song without beats', () => {

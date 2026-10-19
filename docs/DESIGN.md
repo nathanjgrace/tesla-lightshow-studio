@@ -111,14 +111,18 @@ audio ──▶ analysis (Worker) ──▶ choreograph(style, profile) ──�
              sections (verse/chorus)
 ```
 
-- **Analysis:** essentia.js (AGPL, which fits our license) for beat tracking, onsets, melody, key and segmentation. It runs in a Web Worker and the results are cached in the project.
+- **Analysis** (`src/core/analysis.ts`, run in a Web Worker): our own small pipeline instead of essentia.js, which is 10 MB and unmaintained since 2021. Spectral-flux onsets per band; tempo by autocorrelation with a 120 BPM preference, then each tempo look-alike (×2, ×½, ×4⁄3, ×¾) is beat-tracked and the one whose beats land on the strongest onsets wins; dynamic-programming beat tracking (Ellis 2007); 4/4 bar starts from the bass; kick/snare/hi-hat-like hits by dominant band (a kick must also be a real rise in linear bass power); a loudness curve; and sections from four-bar phrases (intro, verse, build, chorus, drop, break, outro). About a second for a four-minute song.
+- **Checked against Tesla's choreography:** Tesla's light changes sit on the beat, so they're a ground truth. On Elevator Music 91% of Tesla's light-ons land on our beat/half-beat grid (6% when the grid is shifted a quarter beat); tempos match Tesla's grid on Auld Lang Syne (140), The Arrival (80) and Ready for Assault (140). Elevator Music is a regression test (fixtures).
+- **Not yet:** melody/pitch (the plan's chases driven by pitch), key, and swing. Orchestral music with tempo changes (Cyber Symphony) is tracked less well.
 - **Choreography** is rules plus a little randomness, controlled by **style presets**:
   - **Section level:** quiet sections use few, slow ramps; choruses and drops use full strobes and chases.
   - **Beat level:** bass and kick hits go to main beams and fogs, snares and claps to turn signals, hi-hats to quick flickers.
   - **Melody:** pitch contour drives chases across ch 4–6, signature and side lights (rising pitch sweeps outward).
   - **Energy:** controls how dense the effects are and how often ramps are used.
 - **Closure planner:** schedules the big moves (falcon wings open on the first big build, dance at the peak chorus, close at the outro). It works backward from travel times, stays within command and thermal budgets, and never moves windows while the doors move.
-- **Novice controls:** style, intensity slider, "use doors?" toggle, and "regenerate this section".
+- **Built** (`src/core/generate.ts`): styles Balanced, Party and Smooth; an intensity slider; a closures switch; Variation (a new seed). Layers are painted frame by frame and turned back into ordinary effects, so everything stays editable. No light flashes more than four times a second; strobes stay near three. A song whose loudness barely changes gets its loudest stretch as the peak (`planSections`). Every vehicle and style is tested against our validator; generated shows for Tesla's songs pass Tesla's `validator.py`.
+- **In the editor:** analysis starts when a show with a song opens. The timeline shows the beat grid (bars brighter), section labels over the waveform and the BPM, and effects snap to beats (halves to eighths as you zoom). An empty show offers **Auto-generate from the song**; generating replaces the export range in one undoable step.
+- **Next:** "regenerate this section", melody-driven chases, and style presets per section.
 
 ## 7. Editor (expert mode)
 
@@ -145,7 +149,7 @@ audio ──▶ analysis (Worker) ──▶ choreograph(style, profile) ──�
 | **M0 Foundation** | Project setup, FSEQ read/write, validator, file-check page | ✅ done |
 | **M1 Playback** | Editor layout (side-by-side / stacked), 3D Model X with working closures, composer timeline with waveform, Tesla example library, audio-synced playback | ✅ first pass |
 | **M2 Editor basics** | Project model (effects compiled to frames, lossless import of any .fseq), draw/move/resize/select effects, undo/redo, copy/paste/duplicate, mirror L↔R, xLights hotkeys, snap, inspector, new show from a song | ✅ first pass |
-| **M3 Auto-generate v1** | essentia.js analysis, beat grid + snapping, beat-driven lights, style presets, closure planner | next (biggest gap vs competitors, see COMPETITION.md) |
+| **M3 Auto-generate v1** | Music analysis, beat grid + snapping, beat-driven lights, style presets, closure planner | ✅ first pass |
 | **M4 Vehicle profiles** | All models and versions in a grouped menu, local VIN decoding with version picker, combined-light (OR) and ramp quirks in the simulation | ✅ first pass |
 | **M5 Expert parity** | Layers, value curves, timing tracks, `.xsq` import, shortcuts | |
 | **M6 More cars** | 3D bodies for Model S, 3, Y, Cybertruck (light bars, RGB); per-version and per-trim lights in the preview | ✅ first pass (stylized) |
@@ -166,10 +170,10 @@ audio ──▶ analysis (Worker) ──▶ choreograph(style, profile) ──�
 | Timeline rendering | HTML canvas | Thousands of cells at 50 frames per second |
 | 3D preview | three.js (MIT) with bloom post-processing | Standard WebGL library; rotate/zoom via OrbitControls |
 | Zip reading | fflate (MIT) | Small, fast; Tesla ships some examples as zips |
-| Audio analysis | essentia.js (AGPL-3.0) | Best in-browser feature set; license matches ours |
+| Audio analysis | Our own (`src/core/analysis.ts`) | Small, testable, no 10 MB dependency; essentia.js was the original plan |
 | Storage | IndexedDB | Large audio files, works offline |
 | Hosting | Static hosting (GitHub Pages or Cloudflare Pages) | Free, no server for v1 |
-| License | AGPL-3.0-only | Owner chose open source; required by essentia.js |
+| License | AGPL-3.0-only | Owner chose open source |
 
 ## 10a. Show library
 

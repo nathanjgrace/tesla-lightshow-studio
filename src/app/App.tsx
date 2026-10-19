@@ -13,6 +13,7 @@ import {
   Rows2,
   Search,
   SkipBack,
+  Sparkles,
   TriangleAlert,
   User,
   Users,
@@ -32,6 +33,7 @@ import {
   type Effect,
   type EffectKind,
 } from '../core/project';
+import { generateShow, planSections, type GenerateOptions } from '../core/generate';
 import { simulate } from '../core/simulate';
 import { bestMatch, durationWarning, guessFromFileName, songInfo, SOURCE_NAMES, type SongInfo } from '../core/songSearch';
 import { formatTime, validate } from '../core/validate';
@@ -44,6 +46,8 @@ import { Composer, type Range } from './Composer';
 import { ComposerBar } from './ComposerBar';
 import { ExportDialog, UsbHelpDialog, VinDialog } from './dialogs';
 import { exportFseq, exportUsbZip } from './exportShow';
+import { GenerateButton, type AnalysisState } from './GeneratePanel';
+import { analyzeSong } from './musicAnalysis';
 import { searchSongs } from './musicSearch';
 import { Menu } from './Menu';
 import { Playback } from './playback';
@@ -110,6 +114,8 @@ export function App() {
   const [doc, setDoc] = useState<Doc>();
   const [range, setRange] = useState<Range>({ startMs: 0, endMs: 0 });
   const [peaks, setPeaks] = useState<Peaks>();
+  const [analysis, setAnalysis] = useState<AnalysisState>({ status: 'none' });
+  const [generateSignal, setGenerateSignal] = useState(0);
   const [loading, setLoading] = useState<{ label: string; progress?: number }>();
   const [error, setError] = useState<string>();
   const [checksOpen, setChecksOpen] = useState(false);
@@ -138,10 +144,16 @@ export function App() {
       setPeaks(undefined);
       playback.setSource(files.audio, duration);
       setLoading(undefined);
+      setAnalysis({ status: files.audio ? 'pending' : 'none' });
       if (files.audio) {
-        computePeaks(files.audio)
+        const audio = files.audio;
+        computePeaks(audio)
           .then((p) => token === loadToken.current && setPeaks(p))
           .catch(() => {});
+        // Beats and sections, for the beat grid and Auto-generate.
+        analyzeSong(audio)
+          .then((a) => token === loadToken.current && setAnalysis({ status: 'ready', analysis: a }))
+          .catch((e: unknown) => token === loadToken.current && setAnalysis({ status: 'failed', error: e instanceof Error ? e.message : String(e) }));
       }
     },
     [playback, editor],
@@ -312,6 +324,35 @@ export function App() {
     const copies = mirrored(selectedEffects());
     if (copies.length) editor.place(copies, false);
   }, [editor, selectedEffects]);
+
+  // The analysis with the sections shows are built on, for the timeline and the panel.
+  const planned = useMemo<AnalysisState>(
+    () => (analysis.status === 'ready' ? { status: 'ready', analysis: { ...analysis.analysis, sections: planSections(analysis.analysis) } } : analysis),
+    [analysis],
+  );
+
+  /** Replaces the effects in the export range with a generated show (one undo step). */
+  const generate = useCallback(
+    (options: GenerateOptions) => {
+      const project = editor.project;
+      if (!project || analysis.status !== 'ready') return;
+      const { startMs, endMs } = range;
+      const generated = generateShow(analysis.analysis, vehicle, project, { ...options, startMs, endMs });
+      // Keep what's outside the range, trimming effects that cross its edges.
+      const kept = project.effects.flatMap((e): Effect[] => {
+        if (e.endMs <= startMs || e.startMs >= endMs) return [e];
+        const parts: Effect[] = [];
+        if (e.startMs < startMs) parts.push({ ...e, endMs: startMs });
+        if (e.endMs > endMs) parts.push({ ...e, id: parts.length ? `${e.id}b` : e.id, startMs: endMs });
+        return parts;
+      });
+      editor.setEffects([...kept, ...generated].sort((a, b) => a.startMs - b.startMs), true);
+      editor.select([]);
+      playback.seek(startMs);
+      setToast({ message: `Generated ${generated.length.toLocaleString()} effects for ${vehicle.name}. Press play to watch; ${MOD_KEY} Z undoes it.` });
+    },
+    [editor, analysis, range, vehicle, playback],
+  );
 
   const changeSelected = useCallback(
     (change: (e: Effect) => Effect) => {
@@ -606,6 +647,20 @@ export function App() {
             <>
               <ComposerBar
                 editor={editor}
+                lead={
+                  <GenerateButton
+                    state={planned}
+                    profile={vehicle}
+                    rangeLabel={
+                      range.startMs <= 0 && range.endMs >= durationMs
+                        ? 'the whole song'
+                        : `${formatTime(range.startMs)} to ${formatTime(range.endMs)} (the export range)`
+                    }
+                    hasEffects={editor.project?.effects.some((e) => e.endMs > range.startMs && e.startMs < range.endMs) ?? false}
+                    onGenerate={generate}
+                    openSignal={generateSignal}
+                  />
+                }
                 onMirror={mirrorSelection}
                 onDelete={() => editor.remove(editor.selection)}
                 onChangeSelected={changeSelected}
@@ -622,7 +677,18 @@ export function App() {
                 range={range}
                 onRangeChange={setRange}
                 zoomRef={zoomRef}
+                analysis={planned.status === 'ready' ? planned.analysis : undefined}
               />
+              {editor.project && editor.project.effects.length === 0 && doc.audio && (
+                <div className="composer-empty">
+                  <Sparkles size={22} className="composer-empty-icon" />
+                  <p className="composer-empty-title">This show is empty</p>
+                  <p className="muted">Let the music write a first version, then make it yours. Or draw effects on the rows yourself.</p>
+                  <button className="primary" onClick={() => setGenerateSignal((n) => n + 1)}>
+                    <Sparkles size={15} /> Auto-generate from the song
+                  </button>
+                </div>
+              )}
             </>
           ) : (
             !loading && started.current ? (

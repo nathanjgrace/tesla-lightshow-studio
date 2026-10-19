@@ -146,6 +146,48 @@ function random(seed: number): () => number {
   };
 }
 
+/**
+ * The sections a show is built on, clipped to a range. A song whose loudness
+ * barely changes comes back from the analysis as one long section; then its
+ * loudest stretch becomes the peak (so the big moves still happen), with a
+ * short intro and outro around it.
+ */
+export function planSections(a: Analysis, startMs = 0, endMs = a.durationMs): Section[] {
+  let list = a.sections.map((s) => ({ ...s, startMs: Math.max(s.startMs, startMs), endMs: Math.min(s.endMs, endMs) }));
+  list = list.filter((s) => s.endMs - s.startMs > 200);
+  if (list.some((s) => LEVELS[s.kind] === 'high')) return list;
+  const length = endMs - startMs;
+  if (length < 8000) return list.length ? list : [{ startMs, endMs, kind: 'verse', energy: 0.5 }];
+  const { hopMs, values } = a.energy;
+  const windowMs = Math.min(30000, length * 0.4);
+  // The loudest window, searched in one-second steps.
+  let best = startMs + (length - windowMs) / 2;
+  let top = -1;
+  for (let t = startMs + length * 0.15; t + windowMs <= endMs - length * 0.1; t += 1000) {
+    let sum = 0;
+    const i0 = Math.floor(t / hopMs);
+    const i1 = Math.floor((t + windowMs) / hopMs);
+    for (let i = i0; i < i1 && i < values.length; i++) sum += values[i]!;
+    if (sum > top) {
+      top = sum;
+      best = t;
+    }
+  }
+  const snap = (t: number) => a.downbeats.find((d) => d >= t) ?? t;
+  const peakStart = snap(best);
+  const peakEnd = Math.min(endMs, snap(best + windowMs));
+  const introEnd = Math.min(peakStart, snap(startMs + Math.min(8000, length * 0.12)));
+  const outroStart = Math.max(peakEnd, endMs - Math.min(8000, length * 0.12));
+  const sec = (s: number, e: number, kind: SectionKind, energy: number): Section[] => (e - s > 200 ? [{ startMs: s, endMs: e, kind, energy }] : []);
+  return [
+    ...sec(startMs, introEnd, 'intro', 0.3),
+    ...sec(introEnd, peakStart, 'verse', 0.6),
+    ...sec(peakStart, peakEnd, 'chorus', 0.9),
+    ...sec(peakEnd, outroStart, 'verse', 0.6),
+    ...sec(outroStart, endMs, 'outro', 0.3),
+  ];
+}
+
 // --- Choreography -----------------------------------------------------------
 
 type Level = 'low' | 'mid' | 'high';
@@ -239,52 +281,8 @@ class Choreographer {
 
   private planned: Section[] | undefined;
 
-  /**
-   * The sections inside the generated range, clipped to it. A song whose
-   * loudness barely changes comes back as one long section; then its loudest
-   * stretch becomes the peak (so the big moves still happen), with a short
-   * intro and outro around it.
-   */
   private sections(): Section[] {
-    if (this.planned) return this.planned;
-    let list = this.a.sections.map((s) => ({ ...s, startMs: Math.max(s.startMs, this.startMs), endMs: Math.min(s.endMs, this.endMs) }));
-    list = list.filter((s) => s.endMs - s.startMs > 200);
-    if (!list.some((s) => LEVELS[s.kind] === 'high')) list = this.withPeak(list);
-    return (this.planned = list);
-  }
-
-  private withPeak(list: Section[]): Section[] {
-    const length = this.endMs - this.startMs;
-    const { hopMs, values } = this.a.energy;
-    const windowMs = Math.min(30000, length * 0.4);
-    if (length < 8000) return list.length ? list : [{ startMs: this.startMs, endMs: this.endMs, kind: 'verse', energy: 0.5 }];
-    // The loudest window, searched in one-second steps.
-    let best = this.startMs + (length - windowMs) / 2;
-    let top = -1;
-    for (let t = this.startMs + length * 0.15; t + windowMs <= this.endMs - length * 0.1; t += 1000) {
-      let sum = 0;
-      const i0 = Math.floor(t / hopMs);
-      const i1 = Math.floor((t + windowMs) / hopMs);
-      for (let i = i0; i < i1 && i < values.length; i++) sum += values[i]!;
-      if (sum > top) {
-        top = sum;
-        best = t;
-      }
-    }
-    const snap = (t: number) => this.a.downbeats.find((d) => d >= t) ?? t;
-    const peakStart = snap(best);
-    const peakEnd = Math.min(this.endMs, snap(best + windowMs));
-    const introEnd = Math.min(peakStart, snap(this.startMs + Math.min(8000, length * 0.12)));
-    const outroStart = Math.max(peakEnd, this.endMs - Math.min(8000, length * 0.12));
-    const sec = (startMs: number, endMs: number, kind: SectionKind, energy: number): Section[] =>
-      endMs - startMs > 200 ? [{ startMs, endMs, kind, energy }] : [];
-    return [
-      ...sec(this.startMs, introEnd, 'intro', 0.3),
-      ...sec(introEnd, peakStart, 'verse', 0.6),
-      ...sec(peakStart, peakEnd, 'chorus', 0.9),
-      ...sec(peakEnd, outroStart, 'verse', 0.6),
-      ...sec(outroStart, this.endMs, 'outro', 0.3),
-    ];
+    return (this.planned ??= planSections(this.a, this.startMs, this.endMs));
   }
 
   lights(): void {

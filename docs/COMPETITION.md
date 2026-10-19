@@ -32,10 +32,10 @@ Sources: [That Lightshow](https://thatteslalightshow.com/), [Light Show Creator]
 | Mirror left↔right | ✅ (M) |
 | Waveform timeline, live preview | ✅ |
 | Validated exports | ✅ (plus closure checks nobody else has) |
-| **One-click auto-generate from beats/drops** | Next: the biggest gap |
+| **One-click auto-generate from beats/drops** | ✅ beats, hits and sections drive lights and a closure planner; three styles, intensity, variations; checked against Tesla's own choreography |
 | Show library / sharing | Tesla examples ✅; community sharing later (M7) |
 | Flash-rate safety limit | To add to the validator |
-| Beat grid snapping | Next, comes with audio analysis |
+| Beat grid snapping | ✅ beat and bar lines, section labels, snapping to beat subdivisions |
 | Many audio formats (That Lightshow takes MP3, WAV, M4A, AAC, OGG, FLAC) | ✅ same set plus Opus; always exported as 44.1 kHz WAV |
 | Drag a song onto the page to start | ✅ |
 | Type a song name, pick from autocomplete | ✅ legally: Apple's iTunes Search with previews and an Apple Music link, then the user adds their own copy, so exports are full-length shows (competitors reportedly build on Apple's 30-second preview clips, which caps a show at 30 seconds and isn't allowed by the preview license) |

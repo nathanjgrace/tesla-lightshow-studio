@@ -5,9 +5,31 @@ export interface Peaks {
   max: Float32Array;
 }
 
+const decoded = new WeakMap<Blob, Promise<AudioBuffer>>();
+
+/** Decodes a song once; the waveform and the music analysis share it. */
+export function decodeAudio(audio: Blob): Promise<AudioBuffer> {
+  let p = decoded.get(audio);
+  if (!p) {
+    p = audio.arrayBuffer().then((bytes) => new OfflineAudioContext(1, 1, 44100).decodeAudioData(bytes));
+    decoded.set(audio, p);
+  }
+  return p;
+}
+
+/** The song as one channel, for analysis. */
+export async function monoSamples(audio: Blob): Promise<{ samples: Float32Array; sampleRate: number }> {
+  const buffer = await decodeAudio(audio);
+  const samples = new Float32Array(buffer.length);
+  for (let c = 0; c < buffer.numberOfChannels; c++) {
+    const data = buffer.getChannelData(c);
+    for (let i = 0; i < samples.length; i++) samples[i]! += data[i]! / buffer.numberOfChannels;
+  }
+  return { samples, sampleRate: buffer.sampleRate };
+}
+
 export async function computePeaks(audio: Blob, bucketMs = 10): Promise<Peaks> {
-  const context = new OfflineAudioContext(1, 1, 44100);
-  const buffer = await context.decodeAudioData(await audio.arrayBuffer());
+  const buffer = await decodeAudio(audio);
   const perBucket = Math.max(1, Math.round((buffer.sampleRate * bucketMs) / 1000));
   const buckets = Math.ceil(buffer.length / perBucket);
   const min = new Float32Array(buckets);

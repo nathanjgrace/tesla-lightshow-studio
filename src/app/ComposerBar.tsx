@@ -66,19 +66,22 @@ function IconButton({ title, onClick, disabled, active, children }: { title: str
 
 interface Props {
   editor: Editor;
+  /** Shown first in the toolbar (the Auto-generate button). */
+  lead?: ReactNode;
   onMirror: () => void;
   onDelete: () => void;
   onChangeSelected: (change: (e: Effect) => Effect) => void;
   zoom: (factor: number | 'fit') => void;
 }
 
-export function ComposerBar({ editor, onMirror, onDelete, onChangeSelected, zoom }: Props) {
+export function ComposerBar({ editor, lead, onMirror, onDelete, onChangeSelected, zoom }: Props) {
   const selected = editor.project?.effects.filter((e) => editor.selection.has(e.id)) ?? [];
   const single = selected.length === 1 ? selected[0] : undefined;
 
   return (
     <div className="composer-bar">
       <div className="composer-tools">
+      {lead}
       <div className="tool-group" role="group" aria-label="Light effects">
         <span className="tool-group-label">Lights</span>
         {LIGHT_BRUSHES.map((b) => (

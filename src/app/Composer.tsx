@@ -8,6 +8,7 @@
 // to seek. Alt disables snapping.
 
 import { useEffect, useRef } from 'react';
+import type { Analysis, SectionKind } from '../core/analysis';
 import { CHANNELS_BY_ID } from '../core/channels';
 import { decodeClosure, type ClosureCommand } from '../core/encoding';
 import type { FseqFile } from '../core/fseq';
@@ -32,6 +33,8 @@ const C = {
   rowAlt: '#131619',
   grid: '#20242a',
   gridMinor: '#181b20',
+  beat: '#1a1e24',
+  bar: '#2a3039',
   label: '#d4d8de',
   labelDim: '#737b86',
   group: '#8b93a0',
@@ -149,7 +152,19 @@ interface Props {
   onRangeChange: (range: Range) => void;
   /** Lets the toolbar zoom buttons drive the view. */
   zoomRef?: React.MutableRefObject<((factor: number | 'fit') => void) | undefined>;
+  /** Beats, bars and sections: drawn as a grid, and effects snap to them. */
+  analysis?: Analysis;
 }
+
+const SECTION_COLORS: Record<SectionKind, string> = {
+  intro: '#5b6b86',
+  verse: '#4f7de6',
+  build: '#c58b2a',
+  chorus: '#e04f72',
+  drop: '#ff3b3b',
+  break: '#5b6b86',
+  outro: '#5b6b86',
+};
 
 export function Composer(props: Props) {
   const host = useRef<HTMLDivElement>(null);
@@ -248,13 +263,26 @@ export function Composer(props: Props) {
       const frameOf = (ms: number) => Math.max(0, Math.min(sim.frameCount, Math.floor(ms / sim.stepTimeMs)));
       const byChannel = effectsByChannel();
 
-      // Minor grid
-      const minor = gridMs();
-      if ((minor / 1000) * view.pxPerSec >= 10) {
-        sctx.fillStyle = C.gridMinor;
-        for (let ms = Math.floor(t0 / minor) * minor; ms <= t1; ms += minor) {
-          const x = xOf(ms);
-          if (x >= LABEL_W) sctx.fillRect(Math.round(x), HEADER_H, 1, height - HEADER_H);
+      // Beat grid (bars brighter) when the song has been analyzed, else a time grid.
+      const a = d().analysis;
+      if (a && a.beats.length > 1) {
+        const pxPerBeat = (60 / a.bpm) * view.pxPerSec;
+        const bars = new Set(a.downbeats);
+        for (const b of a.beats) {
+          if (b < t0 || b > t1) continue;
+          const bar = bars.has(b);
+          if (!bar && pxPerBeat < 6) continue;
+          sctx.fillStyle = bar ? C.bar : C.beat;
+          sctx.fillRect(Math.round(xOf(b)), HEADER_H, 1, height - HEADER_H);
+        }
+      } else {
+        const minor = gridMs();
+        if ((minor / 1000) * view.pxPerSec >= 10) {
+          sctx.fillStyle = C.gridMinor;
+          for (let ms = Math.floor(t0 / minor) * minor; ms <= t1; ms += minor) {
+            const x = xOf(ms);
+            if (x >= LABEL_W) sctx.fillRect(Math.round(x), HEADER_H, 1, height - HEADER_H);
+          }
         }
       }
 
@@ -447,11 +475,37 @@ export function Composer(props: Props) {
           sctx.fillRect(x, top, 1, Math.max(1, bottom - top));
         }
       }
+      // Sections: a line where each starts and its name over the waveform.
+      if (a) {
+        sctx.font = '650 9.5px Inter Variable, system-ui, sans-serif';
+        for (const sec of a.sections) {
+          if (sec.endMs < t0 || sec.startMs > t1) continue;
+          const x = Math.max(LABEL_W, xOf(sec.startMs));
+          const color = SECTION_COLORS[sec.kind];
+          sctx.fillStyle = color;
+          if (xOf(sec.startMs) >= LABEL_W) sctx.fillRect(Math.round(x), RULER_H, 1, WAVE_H);
+          const label = sec.kind.toUpperCase();
+          const w = sctx.measureText(label).width + 10;
+          if (xOf(sec.endMs) - x > w + 6) {
+            sctx.globalAlpha = 0.85;
+            sctx.fillStyle = '#0d1014';
+            roundRect(sctx, x + 4, RULER_H + 4, w, 14, 4);
+            sctx.fill();
+            sctx.globalAlpha = 1;
+            sctx.fillStyle = color;
+            sctx.fillText(label, x + 9, RULER_H + 14.5);
+          }
+        }
+      }
       sctx.fillStyle = '#0b0d10';
       sctx.fillRect(0, 0, LABEL_W, HEADER_H);
       sctx.fillStyle = C.labelDim;
       sctx.font = '600 10.5px Inter Variable, system-ui, sans-serif';
       sctx.fillText(peaks ? 'MUSIC' : 'MUSIC (NONE)', 14, RULER_H + WAVE_H / 2 + 4);
+      if (a?.bpm) {
+        sctx.font = '10px Inter Variable, system-ui, sans-serif';
+        sctx.fillText(`${Math.round(a.bpm)} BPM`, 14, RULER_H + WAVE_H / 2 + 18);
+      }
       sctx.fillStyle = C.grid;
       sctx.fillRect(0, HEADER_H - 1, width, 1);
     }
@@ -616,9 +670,30 @@ export function Composer(props: Props) {
       return { zone: 'empty', row: r, channel };
     }
 
+    /**
+     * Snaps to beats when the song has been analyzed (halves, quarters and
+     * eighths as you zoom in), else to the time grid. Alt turns snapping off.
+     */
     function snapMs(ms: number, alt: boolean) {
-      const step = alt || !d().editor.snap ? d().show.stepTimeMs : gridMs();
-      return Math.max(0, Math.min(durationMs(), Math.round(ms / step) * step));
+      const clamp = (v: number) => Math.max(0, Math.min(durationMs(), v));
+      if (alt || !d().editor.snap) return clamp(Math.round(ms / d().show.stepTimeMs) * d().show.stepTimeMs);
+      const beats = d().analysis?.beats;
+      if (beats && beats.length > 1 && ms >= beats[0]! && ms < beats[beats.length - 1]!) {
+        let lo = 0;
+        let hi = beats.length - 1;
+        while (hi - lo > 1) {
+          const mid = (lo + hi) >> 1;
+          if (beats[mid]! <= ms) lo = mid;
+          else hi = mid;
+        }
+        const interval = beats[hi]! - beats[lo]!;
+        const pxPerBeat = (interval / 1000) * view.pxPerSec;
+        const division = [8, 4, 2, 1].find((n) => pxPerBeat / n >= 10) ?? 1;
+        const step = interval / division;
+        return clamp(beats[lo]! + Math.round((ms - beats[lo]!) / step) * step);
+      }
+      const step = gridMs();
+      return clamp(Math.round(ms / step) * step);
     }
 
     const MIN_RANGE_MS = 1000;
@@ -777,7 +852,7 @@ export function Composer(props: Props) {
 
   // Redraw when the data changes; re-fit when a different show opens.
   const { show, sim, profile, peaks, editor, range, docKey } = props;
-  useEffect(() => redraw.current?.full(), [show, sim, profile, peaks, editor.selection, editor.snap]);
+  useEffect(() => redraw.current?.full(), [show, sim, profile, peaks, editor.selection, editor.snap, props.analysis]);
   useEffect(() => redraw.current?.frame(), [range]);
   useEffect(() => redraw.current?.fit(), [docKey]);
 
