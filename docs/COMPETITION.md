@@ -12,6 +12,10 @@ _Last reviewed 2026-10-19. Goal: be the obvious best tool for Tesla light shows 
 | **Light Show Creator for Tesla** | iOS, Android, Windows | One-tap auto-generate by tempo; exports .xsq for xLights | Reviews ~3.1★: hard to make effects, doors hard to program, export paywall, ads | Paid |
 | **Marquee: Tesla Light Show Studio** | Web (Patreon) | Timeline editor, four vehicle views | Small; **nearly the same name as this project** | Patreon |
 | **Show libraries** (xlightshows.io, teslalightshare.io) | Web | Lots of community shows to download | Not editors | Free |
+| **Maestro – Light Show Studio** (iOS, new) | iOS | Pitches "listens like a choreographer": beats, key, builds, drops, solos, "quiet moments that deserve darkness"; on-device signal processing, nothing uploaded | No ratings yet | Free + IAP |
+| **TLGen** (iOS) | iOS | "Grok AI" generation, 3D preview, all five models | 4.0★ from 4 ratings | Free + IAP |
+| **LightShow Studio for Tesla** (iOS) | iOS | Visual timeline, closures, millisecond timing | No ratings yet; **another near-clash with our name** | Free + IAP |
+| **TTbox** (iOS) | iOS | Wraps, lock chimes and light shows in one Toy Box kit | No ratings yet | Free + IAP |
 
 Sources: [That Lightshow](https://thatteslalightshow.com/), [Light Show Creator](https://lightshowcreator.com/), [App Store listing](https://apps.apple.com/us/app/light-show-creator-for-tesla/id6446385602), [Google Play listing](https://play.google.com/store/apps/details?id=com.coding1024.tslshow&hl=en_US), [Tesla light-show repo](https://github.com/teslamotors/light-show). Feature claims are from vendors' own pages and store listings.
 
@@ -60,4 +64,37 @@ Captured by a real browser on a GitHub Actions runner (the site isn't reachable 
 What it means for us:
 - We stay serverless; nothing is uploaded. If browser-side lookups keep failing for some users, a tiny optional proxy (for example a free Cloudflare Worker in front of iTunes Search) is the fallback after Deezer.
 - Their editor is a coarse beat grid; ours is a full timeline with xLights-style effects, so the lead is in editing depth and preview fidelity. Keep auto-generate visibly musical (melody, per-sound lights) since that's their headline.
+
+## What users say (2026-10-19)
+
+Collected on a GitHub Actions runner:
+- **Read in full:** App Store reviews of Light Show Creator for Tesla (US and Canada, 23 reviews), its Google Play page (3.3★, 10K+ installs), the App Store search for "tesla light show", and the home pages of That Lightshow, lightshowcreator.com and xlightshows.io.
+- **Refused the runner (403):** Reddit, Trustpilot, TMC, Product Hunt and teslalightshare.io.
+
+**Praised (keep matching):**
+- "Generate a good quality show with the single tap of Autogenerate", then "enhance any show … in manual mode". → Our auto-generate plus full editor.
+- "I love that I can import it into xLights and further tweak it." → Interop matters. We open any `.fseq`; an `.xsq` export would go further.
+- "I can do everything … in just a few minutes and have a new lightshow on a USB stick." → Speed from song to USB.
+- "Good dev response is important." → Fast fixes.
+- One-time cost preferred over a subscription. → We're free.
+
+**Asked for (opportunities):**
+- "Wish you could preview dance moves", and "an undo button on the dancing tab". → We simulate closures in 3D, with undo everywhere; worth saying so on the page.
+- "Allow users to create their own macros of LightShow effects." → **Saved patterns / user presets** (not built yet).
+- A show that just keeps the lights on, so the parked car looks occupied. → A **"lights on" template** (cheap to add).
+- Documentation; "not 100% clear what [controls] do". → Shortcut card, per-channel previews.
+- Pull music from YouTube. → Deliberately not (see decisions).
+
+**Complaints (avoid):**
+- Paywall discovered at export after an hour of work.
+- "Generate … just repeats the same thing over and over."
+- "Scrub bar is a mess."
+- "UI is glitchy, I'm not able to preview the show."
+- Ads after paying.
+- Export failures; iOS file-import hoops.
+
+**Competitor features worth noting:**
+- **That Lightshow** writes the export straight onto the USB stick in Chrome/Edge (File System Access API), "verified byte-for-byte".
+- It also offers "Make a Clip" (a shareable video of the show), "Gift a Light Show", a Wrap Studio, and charges $3.99 per export after the first.
+- **lightshowcreator.com** gives one free auto-generate a month and has a community Gallery behind Pro.
 
