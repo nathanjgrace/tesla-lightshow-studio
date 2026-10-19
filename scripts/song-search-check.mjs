@@ -32,15 +32,21 @@ const scenarios = [
 ];
 
 let failed = 0;
+let section = '';
+const log = (message) => {
+  console.log(message);
+  // On GitHub, also as an annotation, so results can be read through the API.
+  if (process.env.GITHUB_ACTIONS) console.log(`::notice title=${section}::${message.replace(/\n/g, ' ')}`);
+};
 const check = (ok, message) => {
-  console.log(`${ok ? '  ✓' : '  ✗'} ${message}`);
+  log(`${ok ? '✓' : '✗'} ${message}`);
   if (!ok) failed++;
 };
 
 for (const [engineName, engine] of [['Chromium', chromium], ['WebKit', webkit]]) {
   const browser = await engine.launch();
   for (const s of scenarios) {
-    console.log(`${engineName}: ${s.name}`);
+    section = `${engineName}: ${s.name}`;
     const page = await browser.newPage();
     page.on('pageerror', (e) => check(false, `page error: ${e.message}`));
     await s.setup(page);
@@ -78,7 +84,7 @@ for (const [engineName, engine] of [['Chromium', chromium], ['WebKit', webkit]])
 // Starting a show from the 30-second clip: an Apple result is matched on
 // Deezer and its MP3 preview downloaded.
 for (const [engineName, engine] of [['Chromium', chromium], ['WebKit', webkit]]) {
-  console.log(`${engineName}: show from the 30-second clip`);
+  section = `${engineName}: show from the 30-second clip`;
   const browser = await engine.launch();
   const page = await browser.newPage();
   page.on('pageerror', (e) => check(false, `page error: ${e.message}`));
@@ -94,7 +100,7 @@ for (const [engineName, engine] of [['Chromium', chromium], ['WebKit', webkit]])
     .waitForSelector('[role="dialog"]', { state: 'detached', timeout: 30000 })
     .then(() => true, () => false);
   check(closed, 'starts a show from the clip');
-  if (!closed) console.log('   dialog says:', (await page.textContent('[role="dialog"]'))?.slice(0, 300));
+  if (!closed) log(`dialog says: ${(await page.textContent('[role="dialog"]'))?.slice(0, 300)}`);
   const transport = (await page.textContent('.transport')) ?? '';
   check(/\/\s*0:(29|30)\.\d/.test(transport), `show is about 30 s long (“${transport.trim()}”)`);
   check((await page.textContent('.file-menu .menu-trigger'))?.includes('30 s clip') ?? false, 'top bar marks it as a clip');
