@@ -1,0 +1,39 @@
+# Song search depends on Apple's and Deezer's public APIs, which can change
+# without notice. This runs real browsers against them weekly, on demand,
+# and when the song search code changes.
+name: Song search check
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '23 14 * * 1'
+  push:
+    branches: [main]
+    paths:
+      - 'src/app/musicSearch.ts'
+      - 'src/app/jsonp.ts'
+      - 'src/app/SongSearch.tsx'
+      - 'src/core/songSearch.ts'
+      - 'scripts/song-search-check.mjs'
+      - '.github/workflows/song-search-check.yml'
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run build
+      - name: Install browsers
+        run: |
+          mkdir -p /tmp/pw && cd /tmp/pw && npm init -y >/dev/null && npm i playwright@1 >/dev/null
+          npx playwright install --with-deps chromium webkit >/dev/null
+      - name: Check song search in real browsers
+        run: |
+          (npx vite preview --port 4173 --strictPort >/dev/null 2>&1 &)
+          sleep 3
+          cp scripts/song-search-check.mjs /tmp/pw/
+          node /tmp/pw/song-search-check.mjs

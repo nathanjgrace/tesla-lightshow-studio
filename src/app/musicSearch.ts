@@ -37,8 +37,6 @@ const PAUSE_MS: Record<FailureReason, number> = { blocked: 5 * 60_000, timeout: 
 
 const cache = new Map<string, SongResult[]>();
 const pausedUntil: Record<SongSource, number> = { apple: 0, deezer: 0 };
-/** Set once a plain request to Apple has failed but JSONP worked. */
-let appleNeedsJsonp = false;
 
 class Failure extends Error {
   constructor(
@@ -83,28 +81,25 @@ export async function searchSongs(term: string, { signal, limit = 8 }: { signal?
   throw new SongSearchError(failures);
 }
 
+/**
+ * Apple sends CORS headers (Access-Control-Allow-Origin: *), so a request
+ * the browser refuses was blocked by an extension or the network, and
+ * there's no point retrying it another way: move on to Deezer.
+ */
 async function searchApple(term: string, limit: number, signal: AbortSignal | undefined): Promise<SongResult[]> {
-  if (!appleNeedsJsonp) {
-    let response: Response | undefined;
-    try {
-      response = await fetchWithTimeout(searchUrl(term, { limit }), signal);
-    } catch (e) {
-      if (isAbort(e) && signal?.aborted) throw e;
-      if (isAbort(e)) throw new Failure('timeout', 'no answer within 7 seconds');
-      // A TypeError: blocked by CORS, a content blocker or the network. JSONP
-      // loads differently and sometimes gets through.
-    }
-    if (response) {
-      if (response.status === 403 || response.status === 429 || response.status >= 500) {
-        throw new Failure('busy', `busy or rate-limited (HTTP ${response.status})`);
-      }
-      if (!response.ok) throw new Failure('error', `HTTP ${response.status}`);
-      return parseItunesResults(await response.json());
-    }
+  let response: Response;
+  try {
+    response = await fetchWithTimeout(searchUrl(term, { limit }), signal);
+  } catch (e) {
+    if (isAbort(e) && signal?.aborted) throw e;
+    if (isAbort(e)) throw new Failure('timeout', 'no answer within 7 seconds');
+    throw new Failure('blocked', 'blocked by the browser, an extension or the network');
   }
-  const json = await jsonpOrFailure((callback) => searchUrl(term, { limit, callback }), signal);
-  appleNeedsJsonp = true;
-  return parseItunesResults(json);
+  if (response.status === 403 || response.status === 429 || response.status >= 500) {
+    throw new Failure('busy', `busy or rate-limited (HTTP ${response.status})`);
+  }
+  if (!response.ok) throw new Failure('error', `HTTP ${response.status}`);
+  return parseItunesResults(await response.json());
 }
 
 async function searchDeezer(term: string, limit: number, signal: AbortSignal | undefined): Promise<SongResult[]> {
