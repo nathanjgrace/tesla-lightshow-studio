@@ -2441,3 +2441,49 @@ button.primary kbd {
 .inspector-pct input[type='number'] {
   width: 58px;
 }
+
+/* Hover card for a channel name: a close-up of what it drives on this car. */
+.channel-card {
+  position: absolute;
+  z-index: 20;
+  width: 300px;
+  overflow: hidden;
+  pointer-events: none;
+  background: rgb(22 25 30 / 0.97);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow);
+}
+
+.channel-card img,
+.channel-card-empty {
+  display: block;
+  width: 100%;
+  aspect-ratio: 300 / 190;
+  object-fit: cover;
+  background: #07090c;
+}
+
+.channel-card-empty {
+  display: grid;
+  place-items: center;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.channel-card-body {
+  padding: 10px 12px 12px;
+}
+
+.channel-card-title {
+  margin-bottom: 6px;
+  font-weight: 650;
+}
+
+.channel-card ul {
+  margin: 0;
+  padding-left: 16px;
+  color: var(--fg-2);
+  font-size: 12px;
+  line-height: 1.45;
+}

@@ -177,7 +177,7 @@ export function hingedDoor(
   const door = new THREE.Mesh(kit.sidePanel(outline, side, 0.03, 0.004), b.m.paint);
   door.position.set(-hingeX, 0, -s * kit.halfWidth);
   hinge.add(door);
-  if (closureId) b.closure(closureId, (p) => (hinge.rotation.y = s * p * deg(62)));
+  if (closureId) b.closure(closureId, (p) => (hinge.rotation.y = s * p * deg(62)), hinge);
   return hinge;
 }
 
@@ -195,7 +195,7 @@ export function windowPane(
   const pane = new THREE.Mesh(kit.sidePanel(outline, side, 0.01, -0.03), b.m.sideGlass);
   pane.position.copy(offset);
   parent.add(pane);
-  b.closure(closureId, (p) => (pane.position.y = offset.y - p * drop));
+  b.closure(closureId, (p) => (pane.position.y = offset.y - p * drop), pane);
 }
 
 export function mirrors(b: Builder, kit: BodyKit, x: number, y: number): void {
@@ -210,7 +210,7 @@ export function mirrors(b: Builder, kit: BodyKit, x: number, y: number): void {
     housing.position.set(-0.02, 0.02, s * 0.19);
     pivot.add(arm, housing);
     // Open = unfolded (sticking out), closed = folded back along the body.
-    b.closure(`${side}Mirror`, (p) => (pivot.rotation.y = s * (1 - p) * deg(-70)));
+    b.closure(`${side}Mirror`, (p) => (pivot.rotation.y = s * (1 - p) * deg(-70)), pivot);
   }
 }
 
@@ -222,7 +222,7 @@ export function doorHandles(b: Builder, kit: BodyKit, spots: { id: string; side:
     const base = s * (kit.surfaceZ(h.x, h.y) + 0.006);
     handle.position.set(h.x, h.y, base);
     b.car.add(handle);
-    b.closure(h.id, (p) => (handle.position.z = base + s * p * 0.04));
+    b.closure(h.id, (p) => (handle.position.z = base + s * p * 0.04), handle);
   }
 }
 
@@ -244,7 +244,7 @@ export function chargePort(b: Builder, kit: BodyKit, x: number, y: number): void
     if (dancing) led.emissive.setHSL((t * 0.6) % 1, 1, 0.5);
     else led.emissive.set(p > 0.05 ? '#4a7dff' : '#000');
     led.emissiveIntensity = p > 0.05 ? 3 : 0;
-  });
+  }, hinge);
 }
 
 /** Dark cabin (so open doors show an interior) and the center display that lights it. */

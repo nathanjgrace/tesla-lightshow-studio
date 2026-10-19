@@ -55,7 +55,8 @@ export interface Builder {
    * `to`; `pixels[i]` lists the channels that light LED i.
    */
   lightBar(mesh: THREE.Mesh, pixels: string[][], from: number, to: number, color: THREE.Color, gain?: number): void;
-  closure(id: string, apply: (position: number, dancing: boolean, timeS: number) => void): void;
+  /** `object`: what moves, so channel previews can frame it. */
+  closure(id: string, apply: (position: number, dancing: boolean, timeS: number) => void, object?: THREE.Object3D): void;
   beam(ids: string[], light: THREE.Light, max: number): void;
 }
 
@@ -123,11 +124,13 @@ interface LightPart {
   material: THREE.MeshStandardMaterial;
   color: THREE.Color;
   gain: number;
+  mesh: THREE.Object3D;
 }
 
 interface LightBar {
   pixels: string[][];
   levels: Float32Array;
+  mesh: THREE.Object3D;
 }
 
 const DEFAULT_PAINT = '#e9eaec';
@@ -146,7 +149,10 @@ export class CarScene {
   private bounds: BuiltBody = { halfLength: 2.65, height: 1.8, halfWidth: 1.1 };
   private lights: LightPart[] = [];
   private bars: LightBar[] = [];
-  private closures: { id: string; apply: (p: number, d: boolean, t: number) => void }[] = [];
+  private closures: { id: string; apply: (p: number, d: boolean, t: number) => void; object?: THREE.Object3D }[] = [];
+  private bodyListeners = new Set<() => void>();
+  /** Changes whenever the car is rebuilt, so cached channel previews can be dropped. */
+  bodyVersion = 0;
   private beams: { ids: string[]; light: THREE.Light; max: number }[] = [];
   private car: THREE.Group | undefined;
   private bodyKey = '';
@@ -285,18 +291,18 @@ export class CarScene {
         const mesh = new THREE.Mesh(new THREE.BoxGeometry(...size), material);
         mesh.position.set(...position);
         parent.add(mesh);
-        this.lights.push({ ids, material, color, gain });
+        this.lights.push({ ids, material, color, gain, mesh });
         return mesh;
       },
       lightMesh: (mesh, ids, color, gain = 5) => {
-        this.lights.push({ ids, material: mesh.material as THREE.MeshStandardMaterial, color, gain });
+        this.lights.push({ ids, material: mesh.material as THREE.MeshStandardMaterial, color, gain, mesh });
       },
       lightBar: (mesh, pixels, from, to, color, gain = 3) => {
         const levels = new Float32Array(pixels.length);
         ledStrip(mesh.material as THREE.MeshStandardMaterial, levels, from, to, color, gain);
-        this.bars.push({ pixels, levels });
+        this.bars.push({ pixels, levels, mesh });
       },
-      closure: (id, apply) => this.closures.push({ id, apply }),
+      closure: (id, apply, object) => this.closures.push({ id, apply, ...(object ? { object } : {}) }),
       beam: (ids, light, max) => this.beams.push({ ids, light, max }),
     };
     const warp = asset?.model === 'modelS' ? warpFor(style) : undefined;
@@ -308,6 +314,99 @@ export class CarScene {
       this.camera.position.copy(this.presetPosition(CAMERA_PRESETS[0]!));
     }
     this.applyFrame();
+    this.bodyVersion++;
+    for (const cb of this.bodyListeners) cb();
+  }
+
+  /** Called whenever the car is rebuilt (a new vehicle, or Tesla's model arriving). */
+  onBodyChange(cb: () => void): () => void {
+    this.bodyListeners.add(cb);
+    return () => this.bodyListeners.delete(cb);
+  }
+
+  /**
+   * A close-up of the lights (or the closure) that some channels drive, with
+   * only those lit, for the composer's channel thumbnails. Rendered on the
+   * main canvas in a corner and copied out at once, then the view is redrawn,
+   * so nothing flashes. Undefined when this car has nothing for the channels.
+   */
+  channelPreview(ids: readonly string[], width: number, height: number): HTMLCanvasElement | undefined {
+    const want = new Set(ids);
+    const targets: THREE.Object3D[] = [];
+    const lit = this.lights.filter((l) => l.ids.some((id) => want.has(id)));
+    targets.push(...lit.map((l) => l.mesh));
+    const bars = this.bars.filter((b) => b.pixels.some((p) => p.some((id) => want.has(id))));
+    targets.push(...bars.map((b) => b.mesh));
+    const closure = this.closures.find((c) => want.has(c.id));
+    if (closure?.object) targets.push(closure.object);
+    // Lights with no lamp of their own in the model (some main beams): frame where the beam starts.
+    const beam = !targets.length ? this.beams.find((b) => b.ids.some((id) => want.has(id))) : undefined;
+    if (beam) {
+      const marker = new THREE.Object3D();
+      marker.position.copy(beam.light.getWorldPosition(new THREE.Vector3()));
+      targets.push(marker);
+    }
+    if (!targets.length || !this.car) return undefined;
+
+    // Light only the chosen lamps; open the chosen closure.
+    for (const part of this.lights) {
+      const on = lit.includes(part);
+      part.material.emissive.copy(part.color);
+      part.material.emissiveIntensity = on ? Math.min(part.gain, 1.6) : 0;
+    }
+    const barLevels = this.bars.map((b) => b.levels.slice());
+    for (const b of this.bars) b.pixels.forEach((p, i) => (b.levels[i] = p.some((id) => want.has(id)) ? 1 : 0));
+    const beams = this.beams.map((b) => b.light.intensity);
+    for (const b of this.beams) b.light.intensity = 0;
+    const cabin = this.cabinLight.intensity;
+    this.cabinLight.intensity = 0;
+    if (closure) closure.apply(closure.id.endsWith('Window') ? 0.6 : 1, false, 0);
+    this.car.updateMatrixWorld(true);
+
+    // Frame the targets from outside the car, looking back toward its middle.
+    const box = new THREE.Box3();
+    for (const t of targets) {
+      if (t instanceof THREE.Mesh || t.children.length) box.expandByObject(t);
+      else box.expandByPoint(t.getWorldPosition(new THREE.Vector3()));
+    }
+    const center = box.getCenter(new THREE.Vector3());
+    const size = box.getSize(new THREE.Vector3());
+    const out = center.clone().sub(this.target).setY(0);
+    if (out.lengthSq() < 1e-4) out.set(1, 0, 0);
+    out.normalize();
+    out.y = 0.32;
+    out.normalize();
+    const cam = new THREE.PerspectiveCamera(28, width / height, 0.05, 60);
+    const span = Math.max(0.45, size.x, size.y * 1.6, size.z);
+    cam.position.copy(center).addScaledVector(out, span / (2 * Math.tan(THREE.MathUtils.degToRad(14))) + 0.35);
+    cam.lookAt(center);
+
+    const r = this.renderer;
+    const dpr = r.getPixelRatio();
+    const canvas = r.domElement;
+    const w = Math.min(width, Math.floor(canvas.width / dpr));
+    const h = Math.min(height, Math.floor(canvas.height / dpr));
+    cam.aspect = w / h;
+    cam.updateProjectionMatrix();
+    r.setScissorTest(true);
+    r.setViewport(0, 0, w, h);
+    r.setScissor(0, 0, w, h);
+    r.render(this.scene, cam);
+    const result = document.createElement('canvas');
+    result.width = Math.round(w * dpr);
+    result.height = Math.round(h * dpr);
+    // The viewport sits at the bottom-left of the drawing buffer.
+    result.getContext('2d')!.drawImage(canvas, 0, canvas.height - result.height, result.width, result.height, 0, 0, result.width, result.height);
+    r.setScissorTest(false);
+    r.setViewport(0, 0, canvas.width / dpr, canvas.height / dpr);
+
+    // Put everything back and redraw the real view.
+    this.bars.forEach((b, i) => b.levels.set(barLevels[i]!));
+    this.beams.forEach((b, i) => (b.light.intensity = beams[i]!));
+    this.cabinLight.intensity = cabin;
+    this.applyFrame();
+    this.composer.render();
+    return result;
   }
 
   resize(): void {

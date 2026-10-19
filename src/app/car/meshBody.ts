@@ -187,7 +187,7 @@ export function buildTeslaBody(b: Builder, asset: TeslaAsset, style: BodyStyle, 
   }
   for (const [part, { group, extent }] of partGroups) {
     const spec = rigs.get(part)!;
-    b.closure(part, (p) => spec.apply(group, p, extent));
+    b.closure(part, (p) => spec.apply(group, p, extent), group);
   }
 
   // Light the street: headlight and fog beams, the red glow of the tail

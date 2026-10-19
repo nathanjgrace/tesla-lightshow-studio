@@ -31,7 +31,16 @@ const storedFlag = (key: string, fallback: boolean) => {
 
 type ModelState = { model: string; progress: number; asset?: TeslaAsset; failed?: boolean };
 
-export function CarView({ sim, vehicle, playback, look }: { sim: Simulation | undefined; vehicle: VehicleProfile; playback: Playback; look: CarLook }) {
+interface Props {
+  sim: Simulation | undefined;
+  vehicle: VehicleProfile;
+  playback: Playback;
+  look: CarLook;
+  /** Hands the 3D scene up, for channel previews in the composer. */
+  onScene?: (scene: CarScene | undefined) => void;
+}
+
+export function CarView({ sim, vehicle, playback, look, onScene }: Props) {
   const body = vehicle.body;
   const host = useRef<HTMLDivElement>(null);
   const [scene, setScene] = useState<CarScene>();
@@ -63,9 +72,14 @@ export function CarView({ sim, vehicle, playback, look }: { sim: Simulation | un
       return;
     }
     setScene(s);
+    onScene?.(s);
     // Lets automated browser checks inspect the scene during development.
     if (import.meta.env.DEV) (window as unknown as { __scene: CarScene }).__scene = s;
-    return () => s.dispose();
+    return () => {
+      onScene?.(undefined);
+      s.dispose();
+    };
+    // The scene lives as long as the view.
   }, []);
 
   // Tesla's own 3D model where it publishes one (Model S, Cybertruck) or one

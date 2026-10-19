@@ -227,7 +227,7 @@ function rearClosure(b: Builder, kit: BodyKit, spec: FamilySpec): void {
   gate.translate(-rc.hinge[0], -rc.hinge[1], 0);
   hinge.add(new THREE.Mesh(gate, [b.m.paint, b.m.glass, b.m.trim]));
   highBrake(b, hinge, [rc.brake[0] - rc.hinge[0], rc.brake[1] - rc.hinge[1], 0]);
-  b.closure('liftgate', (p) => (hinge.rotation.z = -p * deg(rc.openDeg)));
+  b.closure('liftgate', (p) => (hinge.rotation.z = -p * deg(rc.openDeg)), hinge);
 }
 
 /** Model X falcon wings: side wall curving into the roof, hinged on the center line. */
@@ -266,7 +266,7 @@ function falconDoors(b: Builder, kit: BodyKit, spec: FamilySpec): void {
     const upper = assignMaterials(piece(outer.filter(([, yy]) => yy >= 1.5)), (c) => (c.y + roofTop < 1.6 ? 0 : 1));
     hinge.add(new THREE.Mesh(lower, b.m.paint), new THREE.Mesh(upper, [b.m.trim, b.m.glass]));
     windowPane(b, kit, side, spec.rearWindow, `${side}RearWindow`, hinge, new THREE.Vector3(-xMid, -roofTop, 0));
-    b.closure(`${side}FalconDoor`, (p) => (hinge.rotation.x = -s * p * deg(100)));
+    b.closure(`${side}FalconDoor`, (p) => (hinge.rotation.x = -s * p * deg(100)), hinge);
   }
 }
 
@@ -618,7 +618,7 @@ function buildCybertruck(b: Builder): BuiltBody {
   lid.position.set((lidLength / 2) * Math.cos(slope), (lidLength / 2) * Math.sin(slope), 0);
   lid.rotation.z = slope;
   frunkHinge.add(lid);
-  b.closure('liftgate', (p) => (frunkHinge.rotation.z = p * deg(48)));
+  b.closure('liftgate', (p) => (frunkHinge.rotation.z = p * deg(48)), frunkHinge);
   const tub = new THREE.Mesh(new THREE.BoxGeometry(lidLength - 0.1, 0.004, halfWidth * 2 - 0.2), b.m.cabin);
   tub.position.set(1.3 + ((lidLength - 0.1) / 2) * Math.cos(slope), roofAt(1.3) + ((lidLength - 0.1) / 2) * Math.sin(slope) + 0.004, 0);
   tub.rotation.z = slope;

@@ -7,7 +7,7 @@
 // its edges to resize, click to select (shift/cmd to add). Click empty space
 // to seek. Alt disables snapping.
 
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import type { Analysis, SectionKind } from '../core/analysis';
 import { CHANNELS_BY_ID } from '../core/channels';
 import { decodeClosure, type ClosureCommand } from '../core/encoding';
@@ -19,8 +19,12 @@ import type { ChannelGroup, VehicleProfile } from '../core/vehicles';
 import type { Peaks } from './audio';
 import type { Playback } from './playback';
 import type { Editor } from './useEditor';
+import type { ChannelPreviews } from './channelPreviews';
+import { channelFacts } from './channelInfo';
 
-const LABEL_W = 176;
+const LABEL_W = 206;
+/** Channel thumbnail beside each label. */
+const THUMB_W = 30;
 const RULER_H = 24;
 const WAVE_H = 56;
 const ROW_H = 20;
@@ -112,6 +116,9 @@ export function buildRows(profile: VehicleProfile): Row[] {
   return rows;
 }
 
+/** Every channel a row shows. */
+const rowIds = (r: Row): string[] => (r.type === 'closure' ? [r.id] : r.type === 'group' ? [] : r.ids);
+
 const rowHeight = (r: Row) => (r.type === 'group' ? GROUP_H : r.type === 'closure' ? CLOSURE_H : ROW_H);
 const rowChannel = (r: Row): string | undefined =>
   r.type === 'closure' ? r.id : r.type === 'light' && r.editable ? r.ids[0] : undefined;
@@ -156,6 +163,8 @@ interface Props {
   zoomRef?: React.MutableRefObject<((factor: number | 'fit') => void) | undefined>;
   /** Beats, bars and sections: drawn as a grid, and effects snap to them. */
   analysis?: Analysis;
+  /** Pictures of what each channel drives, from the 3D preview. */
+  previews?: ChannelPreviews;
 }
 
 const SECTION_COLORS: Record<SectionKind, string> = {
@@ -174,7 +183,8 @@ export function Composer(props: Props) {
   // Latest props, read by the long-lived canvas handlers.
   const data = useRef(props);
   data.current = props;
-  const redraw = useRef<{ full: () => void; frame: () => void; fit: () => void }>(undefined);
+  const redraw = useRef<{ full: () => void; frame: () => void; fit: () => void; watchPreviews?: () => void }>(undefined);
+  const [hover, setHover] = useState<{ row: Row; top: number; bottom: number }>();
 
   useEffect(() => {
     const el = host.current!;
@@ -446,17 +456,32 @@ export function Composer(props: Props) {
         }
         const note = 'note' in row ? row.note : undefined;
         const editable = 'editable' in row && row.editable;
+        const h = rowHeight(row);
+        const pic = d().previews?.get(rowIds(row));
+        const textX = 18 + THUMB_W + 6;
+        if (pic) {
+          const th = h - 4;
+          const tw = Math.min(THUMB_W, (th * pic.image.width) / pic.image.height);
+          sctx.save();
+          roundRect(sctx, 14, y + 2, tw, th, 3);
+          sctx.clip();
+          // Crop the middle of the picture to the thumbnail's shape.
+          const sw = (pic.image.height * tw) / th;
+          sctx.drawImage(pic.image, (pic.image.width - sw) / 2, 0, sw, pic.image.height, 14, y + 2, tw, th);
+          sctx.restore();
+        }
         sctx.font = '12px Inter Variable, system-ui, sans-serif';
         sctx.fillStyle = note ? C.labelDim : editable ? C.label : C.labelDim;
-        sctx.fillText(fitText(sctx, row.label + (note ? ' *' : ''), LABEL_W - 28), 18, y + 14);
+        sctx.fillText(fitText(sctx, row.label + (note ? ' *' : ''), LABEL_W - textX - 22), textX, y + h / 2 + 4);
         if (!editable) {
           // Small lock: shown, not editable yet (light bars, RGB).
           sctx.fillStyle = '#4a515b';
-          sctx.fillRect(LABEL_W - 18, y + 9, 7, 6);
+          const ly = y + h / 2 - 1;
+          sctx.fillRect(LABEL_W - 18, ly, 7, 6);
           sctx.strokeStyle = '#4a515b';
           sctx.lineWidth = 1.2;
           sctx.beginPath();
-          sctx.arc(LABEL_W - 14.5, y + 9, 2.4, Math.PI, 0);
+          sctx.arc(LABEL_W - 14.5, ly, 2.4, Math.PI, 0);
           sctx.stroke();
         }
       });
@@ -810,6 +835,13 @@ export function Composer(props: Props) {
     function onMove(e: PointerEvent) {
       const { x, y } = pointer(e);
       if (!drag) {
+        // Over a channel name: show what it drives.
+        const r = x < LABEL_W && y > HEADER_H ? rowAt(y) : -1;
+        const row = rows[r];
+        if (row && row.type !== 'group') {
+          const top = HEADER_H + rowTops[r]! - view.scrollY;
+          setHover((cur) => (cur?.row === row ? cur : { row, top, bottom: top + rowHeight(row) }));
+        } else setHover(undefined);
         const h = hit(x, y);
         cv.style.cursor =
           h.zone === 'rangeStart' || h.zone === 'rangeEnd' || (h.zone === 'effect' && h.edge !== 'body')
@@ -970,8 +1002,30 @@ export function Composer(props: Props) {
     cv.addEventListener('pointermove', onMove);
     cv.addEventListener('pointerup', onUp);
     cv.addEventListener('dblclick', onDouble);
+    const onLeave = () => setHover(undefined);
+    cv.addEventListener('pointerleave', onLeave);
     window.addEventListener('keydown', onKey, true);
+    const offPreviews = { current: () => {} };
+    let previewsFor: ChannelPreviews | undefined;
+    // New pictures arrive one at a time; redraw (at most once a frame) as they do.
+    let pendingRedraw = 0;
+    const watchPreviews = () => {
+      const p = d().previews;
+      if (p === previewsFor) return;
+      offPreviews.current();
+      previewsFor = p;
+      offPreviews.current = p
+        ? p.subscribe(() => {
+            if (!pendingRedraw) pendingRedraw = requestAnimationFrame(() => ((pendingRedraw = 0), full()));
+          })
+        : () => {};
+    };
+    watchPreviews();
+    redraw.current.watchPreviews = watchPreviews;
     return () => {
+      offPreviews.current();
+      cancelAnimationFrame(pendingRedraw);
+      cv.removeEventListener('pointerleave', onLeave);
       window.removeEventListener('keydown', onKey, true);
       observer.disconnect();
       unsubscribe();
@@ -988,10 +1042,36 @@ export function Composer(props: Props) {
   useEffect(() => redraw.current?.full(), [show, sim, profile, peaks, editor.selection, editor.snap, props.analysis]);
   useEffect(() => redraw.current?.frame(), [range]);
   useEffect(() => redraw.current?.fit(), [docKey]);
+  useEffect(() => {
+    redraw.current?.watchPreviews?.();
+    redraw.current?.full();
+  }, [props.previews]);
+  // Re-render the hover card when its picture arrives.
+  const [, setPictures] = useState(0);
+  useEffect(() => props.previews?.subscribe(() => setPictures((n) => n + 1)), [props.previews]);
 
+  const picture = hover && props.previews?.get(rowIds(hover.row));
   return (
     <div ref={host} className="composer-canvas">
       <canvas ref={canvas} />
+      {hover && hover.row.type !== 'group' && (
+        <div className="channel-card" style={{ left: LABEL_W + 8, top: Math.max(HEADER_H, hover.top - 40) }} role="tooltip">
+          {picture ? (
+            <img src={picture.url} alt="" />
+          ) : (
+            <div className="channel-card-empty">{picture === null ? 'Not shown on the 3D model' : props.previews ? 'Rendering…' : 'No 3D preview'}</div>
+          )}
+          <div className="channel-card-body">
+            <div className="channel-card-title">{hover.row.label}</div>
+            <ul>
+              {channelFacts(profile, rowIds(hover.row)).map((f) => (
+                <li key={f}>{f}</li>
+              ))}
+              {'note' in hover.row && hover.row.note && !channelFacts(profile, rowIds(hover.row)).includes(hover.row.note) && <li>{hover.row.note}</li>}
+            </ul>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

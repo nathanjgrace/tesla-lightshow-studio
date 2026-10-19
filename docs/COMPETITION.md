@@ -26,6 +26,7 @@ Sources: [That Lightshow](https://thatteslalightshow.com/), [Light Show Creator]
 3. **Closure safety.** The validator catches command limits, dance-before-open, thermal limits and Model X pinch risk. Nobody else advertises this.
 4. **Open any show and keep editing.** Imported `.fseq` files become editable effects, byte-for-byte lossless. That makes us the editor for every show in the community libraries.
 5. **Respect for xLights users.** Tesla's xLights hotkeys (F, E/D/C, W/S/X, Q/A/Z) work the same way.
+7. **Every channel explained on your car.** Hover a channel name for a close-up of the exact lamp segment (or door) it drives on the chosen model, plus how that car treats it. Users of other tools complain they can't tell what controls do.
 6. **The best-looking preview.** Tesla's own textured 3D models, wired light by light from Tesla's xLights layout: the Model S and Cybertruck as Tesla made them (including every Cybertruck light bar LED), and the Model X, 3 and Y reshaped from the S. The car sits in a wet parking lot that reflects the show, in the paint it was sold in. Competitors use generic or stylized models.
 
 ## Must match (or beat)

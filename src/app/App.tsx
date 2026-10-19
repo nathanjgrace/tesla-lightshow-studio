@@ -42,6 +42,8 @@ import { DEFAULT_SHOW_ID, LIBRARY, type LibraryShow } from '../library/catalog';
 import { AUDIO_ACCEPT, audioType, fromZip, isAudioFile, loadLibraryShow, type LoadedFiles } from '../library/load';
 import { audioDurationMs, computePeaks, type Peaks } from './audio';
 import { CarView } from './CarView';
+import type { CarScene } from './car/CarScene';
+import { ChannelPreviews } from './channelPreviews';
 import { shortVehicleName, useCarLook } from './carLook';
 import { PaintPicker } from './PaintPicker';
 import { Shortcuts } from './Shortcuts';
@@ -114,6 +116,9 @@ export function App() {
     () => VEHICLES_BY_ID.get(stored('vehicle') ?? '') ?? VEHICLES_BY_ID.get(DEFAULT_VEHICLE_ID)!,
   );
   const look = useCarLook(vehicle);
+  const [carScene, setCarScene] = useState<CarScene>();
+  const previews = useMemo(() => carScene && new ChannelPreviews(carScene), [carScene]);
+  useEffect(() => () => previews?.dispose(), [previews]);
   const [carMode, setCarMode] = useState<CarMode>('single');
   const [doc, setDoc] = useState<Doc>();
   const [range, setRange] = useState<Range>({ startMs: 0, endMs: 0 });
@@ -680,7 +685,7 @@ export function App() {
         style={{ gridTemplate: layout === 'side' ? `1fr / ${split}fr 5px ${1 - split}fr` : `${split}fr 5px ${1 - split}fr / 1fr` }}
       >
         <section className="pane car-pane">
-          <CarView sim={sim} vehicle={vehicle} playback={playback} look={look} />
+          <CarView sim={sim} vehicle={vehicle} playback={playback} look={look} onScene={setCarScene} />
         </section>
         <div className="splitter" onPointerDown={startDrag} role="separator" aria-orientation={layout === 'side' ? 'vertical' : 'horizontal'} />
         <section className="pane composer">
@@ -708,6 +713,7 @@ export function App() {
                 zoom={(f) => zoomRef.current?.(f)}
               />
               <Composer
+                previews={previews}
                 docKey={doc.key}
                 show={show}
                 sim={sim}
