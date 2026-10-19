@@ -37,6 +37,8 @@ interface Tri {
   part?: string;
   /** Channels that light it, if it's a lamp. */
   lights?: string[];
+  /** The LED bar it belongs to, drawn LED by LED rather than by triangle. */
+  bar?: string;
 }
 
 interface PartRig {
@@ -82,7 +84,7 @@ export function buildTeslaBody(b: Builder, asset: TeslaAsset, style: BodyStyle, 
   // Lamps: Cybertruck light bars by position along the bar, everything else
   // by the nearest channel in Tesla's layout.
   const lensTris = tris.filter((t) => t.role === 'lens' || t.role === 'redLens');
-  if (isCybertruck) cybertruckBars(lensTris, lampNodes, channelOf);
+  const bars = isCybertruck ? cybertruckBars(lensTris, lampNodes, channelOf) : [];
   const unassigned = lensTris.filter((t) => !t.lights);
   const nearest = nearestNodes(
     unassigned.flatMap((t) => t.centroid.toArray()),
@@ -101,6 +103,7 @@ export function buildTeslaBody(b: Builder, asset: TeslaAsset, style: BodyStyle, 
   const materials = meshMaterials(b, asset);
   const buckets = new Map<string, Tri[]>();
   for (const t of tris) {
+    if (t.bar) continue;
     const key = `${t.part ?? ''}|${t.role}|${t.lights?.join('+') ?? ''}`;
     let list = buckets.get(key);
     if (!list) buckets.set(key, (list = []));
@@ -130,6 +133,7 @@ export function buildTeslaBody(b: Builder, asset: TeslaAsset, style: BodyStyle, 
     const ids = lightKey ? lightKey.split('+') : [];
     let material = materials[role === 'glass' && part ? 'sideGlass' : role];
     if (ids.length) material = material.clone();
+    if (role === 'paint' || role === 'trim' || role === 'black') insideFaces(material);
     const mesh = new THREE.Mesh(mergeTriangles(list), material);
     if (part) {
       const g = partGroup(part);
@@ -140,6 +144,11 @@ export function buildTeslaBody(b: Builder, asset: TeslaAsset, style: BodyStyle, 
       rig.add(mesh);
     }
     if (ids.length) b.lightMesh(mesh, ids, lampColor(ids, role), 4);
+  }
+  for (const bar of bars) {
+    const mesh = new THREE.Mesh(mergeTriangles(bar.tris), materials[bar.tris[0]!.role].clone());
+    rig.add(mesh);
+    b.lightBar(mesh, bar.pixels, bar.from, bar.to, lampColor(bar.pixels[0]!, bar.tris[0]!.role));
   }
   // Lamps Tesla's mesh doesn't model (Model S side repeaters, license plate
   // and rear fogs): a small lens at the layout's position.
@@ -263,6 +272,33 @@ function lampColor(ids: string[], role: MaterialRole): THREE.Color {
 }
 
 type Materials = Record<MaterialRole | 'sideGlass', THREE.Material>;
+
+/**
+ * Tesla's meshes are a shell of single-sided panels with no interior, so
+ * from inside (through an open liftgate, say) the doors and roof vanish.
+ * This draws the panels' back faces too, as dark unpainted lining.
+ */
+function insideFaces(material: THREE.Material): void {
+  if (material.userData.insideFaces) return;
+  material.userData.insideFaces = true;
+  material.side = THREE.DoubleSide;
+  const before = material.onBeforeCompile.bind(material);
+  const key = material.customProgramCacheKey();
+  material.customProgramCacheKey = () => `inside:${key}`;
+  material.onBeforeCompile = (shader, renderer) => {
+    before(shader, renderer);
+    shader.fragmentShader = shader.fragmentShader
+      .replace('#include <color_fragment>', '#include <color_fragment>\nif ( !gl_FrontFacing ) diffuseColor.rgb = vec3( 0.03 );')
+      .replace('#include <roughnessmap_fragment>', '#include <roughnessmap_fragment>\nif ( !gl_FrontFacing ) roughnessFactor = 0.9;')
+      .replace('#include <metalnessmap_fragment>', '#include <metalnessmap_fragment>\nif ( !gl_FrontFacing ) metalnessFactor = 0.0;')
+      .replace('#include <emissivemap_fragment>', '#include <emissivemap_fragment>\nif ( !gl_FrontFacing ) totalEmissiveRadiance = vec3( 0.0 );')
+      .replace(
+        '#include <lights_physical_fragment>',
+        '#include <lights_physical_fragment>\n#ifdef USE_CLEARCOAT\nif ( !gl_FrontFacing ) material.clearcoat = 0.0;\n#endif',
+      );
+  };
+  material.needsUpdate = true;
+}
 
 function meshMaterials(b: Builder, asset: TeslaAsset): Materials {
   const tex = (name: string) => asset.textures.get(name) ?? null;
@@ -481,11 +517,20 @@ function cybertruckParts(
  * numbered left to right. Tesla's layout also puts the brake light and rear
  * turn signals on the rear bar, so those channels light the LEDs near them.
  */
-function cybertruckBars(lens: Tri[], lampNodes: PlacedNode[], channelOf: (n: PlacedNode) => { id: string } | undefined): void {
+interface LedBar {
+  tris: Tri[];
+  /** Channels lighting each LED: the bar's own pixel, plus any lamp sharing its lens. */
+  pixels: string[][];
+  from: number;
+  to: number;
+}
+
+function cybertruckBars(lens: Tri[], lampNodes: PlacedNode[], channelOf: (n: PlacedNode) => { id: string } | undefined): LedBar[] {
   const bars: { base: string; count: number; test: (c: THREE.Vector3) => boolean }[] = [
     { base: 'frontLightBar', count: 60, test: (c) => c.x > 200 && c.y >= 86 && c.y <= 116 },
     { base: 'rearLightBar', count: 52, test: (c) => c.x < -200 && c.y >= 106 },
   ];
+  const out: LedBar[] = [];
   for (const bar of bars) {
     const on = lens.filter((t) => bar.test(t.centroid));
     if (!on.length) continue;
@@ -495,8 +540,9 @@ function cybertruckBars(lens: Tri[], lampNodes: PlacedNode[], channelOf: (n: Pla
       min = Math.min(min, t.centroid.z);
       max = Math.max(max, t.centroid.z);
     }
+    const pixels = Array.from({ length: bar.count }, (_, i) => [`${bar.base}${i + 1}`]);
     for (const t of on) {
-      const ids = [`${bar.base}${pixelIndex(t.centroid.z, min, max, bar.count) + 1}`];
+      const ids = pixels[pixelIndex(t.centroid.z, min, max, bar.count)]!;
       for (const n of lampNodes) {
         if (t.centroid.distanceTo(new THREE.Vector3(...n.position)) < 14) {
           const id = channelOf(n)?.id;
@@ -504,6 +550,9 @@ function cybertruckBars(lens: Tri[], lampNodes: PlacedNode[], channelOf: (n: Pla
         }
       }
       t.lights = ids;
+      t.bar = bar.base;
     }
+    out.push({ tris: on, pixels, from: min, to: max });
   }
+  return out;
 }

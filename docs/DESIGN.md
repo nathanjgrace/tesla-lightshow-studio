@@ -156,7 +156,7 @@ audio ──▶ analysis (Worker) ──▶ choreograph(style, profile) ──�
 | **M7a Multi-car** | Several cars side by side, cross-car sweeps, one file per car | placeholder |
 | **M6a HQ assets** | Tesla's own textured Model S and Cybertruck models, with every light and moving part wired from Tesla's xLights layout; Model X, original Model 3 and Model Y reshaped from the Model S (§10b). Still to do: refreshed Model 3 (2024+) and Model Y (2025+), and exact models of every car (licensed or commissioned) | ✅ first pass |
 | **M6b Paint** | Factory paint colors per model version and year, a custom color with finish (gloss, metallic, satin, matte), and a reflections switch | ✅ first pass |
-| **M6c Scene** | Wet night street (mirror reflections streaked by puddles), slow auto-rotate while playing | ✅ first pass |
+| **M6c Scene** | Wet parking lot at night (mirror reflections streaked by puddles), slow auto-rotate while playing | ✅ first pass |
 | **M7 Community** | Accounts, cloud projects, share/browse shows, multi-car shows | |
 
 ## 10. Technology choices
@@ -191,7 +191,7 @@ For the refreshed Model 3 (2024+) and Model Y (2025+), whose slim lamps and ligh
 
 **Paint** (`src/core/paint.ts`, `src/app/PaintPicker.tsx`) lists the factory colors each vehicle version was sold in, with years (sources: `research/02-paint-colors.md`), plus a custom color with a finish. The choice is remembered per version and only affects the preview. **Reflections** is off by default: bright reflections on the body can be mistaken for show lights. The night environment is dim and has no point-like highlights for the same reason.
 
-**Scene** (`src/app/car/street.ts`): the car is parked at a curb on a wet street. The road is lit asphalt under a `Reflector` mirror whose shader blurs, streaks and fades reflections by a procedural puddle mask, so the car's lights smear across the road. While a show plays, the camera slowly circles the car (**Auto-rotate**, on by default); picking a camera view turns it off.
+**Scene** (`src/app/car/lot.ts`): the car is nosed into a stall in an empty parking lot after rain, with a planted island and tall lot lights ahead of it and more rows fading into the dark. The ground is lit asphalt under a `Reflector` mirror whose shader blurs, streaks and fades reflections by a procedural puddle mask, so the car's lights smear across the wet ground. The car gets a soft sky fill and a high moon, enough to read its shape without competing with its lights; the bloom is kept tight and gentle so the pixels of a dense light bar stay distinct (the Cybertruck's bars are drawn LED by LED in the shader, with a dark seam between LEDs). Tesla's meshes have no interior, so panel back faces render as dark lining: looking in through an open liftgate shows the inside of the doors, not the lot. While a show plays, the camera slowly circles the car (**Auto-rotate**, on by default); picking a camera view turns it off.
 
 ## 10c. Single car first
 

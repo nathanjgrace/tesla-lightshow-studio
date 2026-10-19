@@ -16,7 +16,7 @@ import { warpFor } from './derive';
 import { buildTeslaBody } from './meshBody';
 import type { TeslaAsset } from './teslaAssets';
 import { shadowTexture } from './kit';
-import { buildStreet, streetEnvironment, type Street } from './street';
+import { buildLot, lotEnvironment, type Lot } from './lot';
 
 export interface Materials {
   paint: THREE.MeshPhysicalMaterial;
@@ -50,6 +50,11 @@ export interface Builder {
   ): THREE.Mesh;
   /** Registers an existing mesh (with its own material) as a lamp. */
   lightMesh(mesh: THREE.Mesh, ids: string[], color: THREE.Color, gain?: number): void;
+  /**
+   * Registers a mesh as a strip of LEDs along its local z axis, `from` to
+   * `to`; `pixels[i]` lists the channels that light LED i.
+   */
+  lightBar(mesh: THREE.Mesh, pixels: string[][], from: number, to: number, color: THREE.Color, gain?: number): void;
   closure(id: string, apply: (position: number, dancing: boolean, timeS: number) => void): void;
   beam(ids: string[], light: THREE.Light, max: number): void;
 }
@@ -66,7 +71,7 @@ export interface BuiltBody {
 }
 
 /**
- * Reflections of the (dim, night-street) environment. Off by default: bright
+ * Reflections of the (dim, night-time parking lot) environment. Off by default: bright
  * reflections on the body can be mistaken for light show effects.
  */
 type ReflectionSpec = {
@@ -120,6 +125,11 @@ interface LightPart {
   gain: number;
 }
 
+interface LightBar {
+  pixels: string[][];
+  levels: Float32Array;
+}
+
 const DEFAULT_PAINT = '#e9eaec';
 /** About 80 seconds per lap. */
 const AUTO_ROTATE_SPEED = (2 * Math.PI) / 80;
@@ -135,6 +145,7 @@ export class CarScene {
   private readonly target = new THREE.Vector3(0, 0.8, 0);
   private bounds: BuiltBody = { halfLength: 2.65, height: 1.8, halfWidth: 1.1 };
   private lights: LightPart[] = [];
+  private bars: LightBar[] = [];
   private closures: { id: string; apply: (p: number, d: boolean, t: number) => void }[] = [];
   private beams: { ids: string[]; light: THREE.Light; max: number }[] = [];
   private car: THREE.Group | undefined;
@@ -147,7 +158,7 @@ export class CarScene {
   private userMovedCamera = false;
   private size = { w: 0, h: 0 };
   private cameraTween: { from: THREE.Vector3; to: THREE.Vector3; start: number } | undefined;
-  private readonly street: Street;
+  private readonly lot: Lot;
   private readonly timer = new THREE.Timer();
   private autoRotate = false;
   /** Current orbit speed (rad/s), eased toward the target so it starts and stops smoothly. */
@@ -177,7 +188,7 @@ export class CarScene {
     this.scene.background = new THREE.Color('#07090c');
     this.scene.fog = new THREE.Fog('#07090c', 20, 50);
     const pmrem = new THREE.PMREMGenerator(this.renderer);
-    this.scene.environment = pmrem.fromScene(streetEnvironment(), 0.02).texture;
+    this.scene.environment = pmrem.fromScene(lotEnvironment(), 0.02).texture;
     pmrem.dispose();
 
     this.controls = new OrbitControls(this.camera, this.renderer.domElement);
@@ -197,14 +208,15 @@ export class CarScene {
       this.updateAutoRotate();
     });
 
-    // Night: a soft sky fill and a high moon. No low rim light: from the
-    // default views its highlight on glossy glass looked like a lamp.
-    this.scene.add(new THREE.HemisphereLight('#8f9cb6', '#151515', 0.95));
-    const moon = new THREE.DirectionalLight('#c4d0ff', 0.95);
+    // Night: a soft sky fill and a high moon, enough to read the car's shape
+    // without competing with its lights. No low rim light: from the default
+    // views its highlight on glossy glass looked like a lamp.
+    this.scene.add(new THREE.HemisphereLight('#8f9cb6', '#1c1c1c', 1.2));
+    const moon = new THREE.DirectionalLight('#c4d0ff', 1.15);
     moon.position.set(-4, 8, 5);
     this.scene.add(moon);
 
-    this.street = buildStreet(this.scene);
+    this.lot = buildLot(this.scene);
     const shadow = new THREE.Mesh(
       new THREE.PlaneGeometry(6, 2.5),
       new THREE.MeshBasicMaterial({ map: shadowTexture(), transparent: true, depthWrite: false }),
@@ -215,7 +227,9 @@ export class CarScene {
 
     this.composer = new EffectComposer(this.renderer);
     this.composer.addPass(new RenderPass(this.scene, this.camera));
-    this.bloom = new UnrealBloomPass(new THREE.Vector2(256, 256), 0.8, 0.45, 0.92);
+    // A tight, gentle glow: enough to read as light, small enough that the
+    // separate pixels of a dense light bar stay distinct.
+    this.bloom = new UnrealBloomPass(new THREE.Vector2(256, 256), 0.42, 0.12, 0.95);
     this.composer.addPass(this.bloom);
     this.composer.addPass(new OutputPass());
 
@@ -254,6 +268,7 @@ export class CarScene {
       });
     }
     this.lights = [];
+    this.bars = [];
     this.closures = [];
     this.beams = [];
     const car = new THREE.Group();
@@ -274,6 +289,11 @@ export class CarScene {
       },
       lightMesh: (mesh, ids, color, gain = 5) => {
         this.lights.push({ ids, material: mesh.material as THREE.MeshStandardMaterial, color, gain });
+      },
+      lightBar: (mesh, pixels, from, to, color, gain = 3) => {
+        const levels = new Float32Array(pixels.length);
+        ledStrip(mesh.material as THREE.MeshStandardMaterial, levels, from, to, color, gain);
+        this.bars.push({ pixels, levels });
       },
       closure: (id, apply) => this.closures.push({ id, apply }),
       beam: (ids, light, max) => this.beams.push({ ids, light, max }),
@@ -297,7 +317,7 @@ export class CarScene {
     // never push its container's layout around.
     this.renderer.setSize(w, h, false);
     this.composer.setSize(w, h);
-    this.street.setSize(w * this.renderer.getPixelRatio(), h * this.renderer.getPixelRatio());
+    this.lot.setSize(w * this.renderer.getPixelRatio(), h * this.renderer.getPixelRatio());
     this.bloom.setSize(w, h);
     this.camera.aspect = w / h;
     this.camera.updateProjectionMatrix();
@@ -399,7 +419,7 @@ export class CarScene {
 
   dispose(): void {
     cancelAnimationFrame(this.raf);
-    this.street.dispose();
+    this.lot.dispose();
     this.timer.dispose();
     this.controls.dispose();
     this.renderer.dispose();
@@ -452,6 +472,13 @@ export class CarScene {
       part.material.emissive.copy(part.color);
       part.material.emissiveIntensity = level * part.gain;
     }
+    for (const bar of this.bars) {
+      bar.pixels.forEach((ids, i) => {
+        let level = 0;
+        for (const id of ids) level = Math.max(level, this.level(id));
+        bar.levels[i] = level;
+      });
+    }
     for (const beam of this.beams) {
       let level = 0;
       for (const id of beam.ids) level = Math.max(level, this.level(id));
@@ -469,6 +496,35 @@ export class CarScene {
     this.cabinLight.color.setRGB(r, g, b);
     this.cabinLight.intensity = Math.max(r, g, b) * (this.bounds.cabinGain ?? 6);
   }
+}
+
+/**
+ * Lights a mesh as separate LEDs: each fragment finds its LED by position
+ * along local z and takes that LED's level, with a dark seam between LEDs so
+ * a busy pattern on a dense bar still reads pixel by pixel.
+ */
+function ledStrip(material: THREE.MeshStandardMaterial, levels: Float32Array, from: number, to: number, color: THREE.Color, gain: number): void {
+  material.emissive.copy(color);
+  material.emissiveIntensity = gain;
+  material.customProgramCacheKey = () => `led:${levels.length}`;
+  material.onBeforeCompile = (shader) => {
+    shader.uniforms.ledLevels = { value: levels };
+    shader.uniforms.ledRange = { value: new THREE.Vector2(from, to) };
+    shader.vertexShader = shader.vertexShader
+      .replace('#include <common>', '#include <common>\nvarying float vLedZ;')
+      .replace('#include <begin_vertex>', '#include <begin_vertex>\nvLedZ = position.z;');
+    shader.fragmentShader = shader.fragmentShader
+      .replace('#include <common>', `#include <common>\nvarying float vLedZ;\nuniform float ledLevels[${levels.length}];\nuniform vec2 ledRange;`)
+      .replace(
+        '#include <emissivemap_fragment>',
+        `#include <emissivemap_fragment>
+        float ledT = clamp( ( vLedZ - ledRange.x ) / ( ledRange.y - ledRange.x ), 0.0, 0.99999 ) * ${levels.length}.0;
+        float ledF = fract( ledT );
+        float ledSeam = smoothstep( 0.0, 0.16, ledF ) * smoothstep( 1.0, 0.84, ledF );
+        totalEmissiveRadiance *= ledLevels[ int( ledT ) ] * mix( 0.12, 1.0, ledSeam );`,
+      );
+  };
+  material.needsUpdate = true;
 }
 
 /**

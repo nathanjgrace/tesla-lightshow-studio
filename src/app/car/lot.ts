@@ -1,25 +1,29 @@
-// The set the car sits on: a wet city street at night. The road is lit
-// asphalt with a mirror (Reflector) laid just above it; the mirror's shader
-// blurs, streaks and fades the reflection by a procedural puddle mask, so the
-// car's lights smear across the wet road the way they do in real life.
+// The set the car sits on: an empty parking lot at night, after rain. The
+// ground is lit asphalt with a mirror (Reflector) laid just above it; the
+// mirror's shader blurs, streaks and fades the reflection by a procedural
+// puddle mask, so the car's lights smear across the wet ground the way they
+// do in real life.
 //
-// Layout (meters, x = forward, z = right): the car is parked against a curb on
-// its left (-z), facing +x, with the road opening toward the default camera.
+// Layout (meters, x = forward, z = right): the car is nosed into a stall
+// facing +x, with a planted island just ahead of it. The lot repeats every
+// MODULE meters along x: island, a row of stalls facing it, a driving aisle,
+// and a row facing the next island. Our row ends at the island at x = HEAD_X.
 
 import * as THREE from 'three';
 import { Reflector } from 'three/examples/jsm/objects/Reflector.js';
 
-const CURB_Z = -1.6;
+const HEAD_X = 2.9;
+const ISLAND = 2;
+const STALL_LENGTH = 5.8;
+const STALL_WIDTH = 2.7;
+const AISLE = 7;
+const MODULE = ISLAND + 2 * STALL_LENGTH + AISLE;
 const CURB_HEIGHT = 0.15;
-const SIDEWALK_WIDTH = 4;
-const LAMPS: [number, number][] = [
-  [-10, CURB_Z - 0.6],
-  [13, CURB_Z - 0.6],
-  [-34, CURB_Z - 0.6],
-  [37, CURB_Z - 0.6],
-];
-const LAMP_HEIGHT = 6.2;
-const LAMP_COLOR = new THREE.Color('#ffcf94');
+// Poles stand in the islands, clear of the side and front camera views.
+const POLE_Z = [-13.5, 13.5, -40.5, 40.5];
+const LAMP_HEIGHT = 8;
+const LAMP_COLOR = new THREE.Color('#ffe0b5');
+const f = (n: number) => n.toFixed(3);
 
 // Value noise and fbm shared by the asphalt and the mirror, so puddles line
 // up in both.
@@ -50,22 +54,21 @@ const NOISE_GLSL = /* glsl */ `
   float st_puddle(vec2 p) {
     return smoothstep(0.5, 0.62, st_fbm(p * 0.32 + vec2(3.7, 1.3)));
   }
-  /** Lane paint: 1 on a line. Solid edge line by the curb, dashed lane line, double yellow. */
-  float st_band(float z, float center, float halfWidth) {
-    return 1.0 - smoothstep(halfWidth - 0.01, halfWidth + 0.01, abs(z - center));
-  }
+  /** Stall lines: 1 on a line. They run along x, between stalls, in both rows of each module. */
   vec3 st_paint(vec2 p) {
-    float edge = st_band(p.y, ${(CURB_Z + 0.32).toFixed(2)}, 0.06);
-    float dash = st_band(p.y, 2.6, 0.06) * step(0.0, sin(p.x * 0.6981));
-    float yellow = st_band(p.y, 6.15, 0.06) + st_band(p.y, 6.45, 0.06);
+    float u = mod(p.x - ${f(HEAD_X)}, ${f(MODULE)});
+    float inRow = step(${f(ISLAND)}, u) * step(u, ${f(ISLAND + STALL_LENGTH)}) + step(${f(ISLAND + STALL_LENGTH + AISLE)}, u);
+    float w = (p.y - ${f(STALL_WIDTH / 2)}) / ${f(STALL_WIDTH)};
+    float d = abs(w - floor(w + 0.5)) * ${f(STALL_WIDTH)};
+    float line = (1.0 - smoothstep(0.05, 0.07, d)) * inRow;
     // Worn paint: break it up a little.
     float wear = 0.55 + 0.45 * smoothstep(0.2, 0.6, st_noise(p * 7.0));
-    return vec3(edge + dash, yellow, 0.0) * wear;
+    return vec3(line, 0.0, 0.0) * wear;
   }
 `;
 
 const MIRROR_SHADER = {
-  name: 'WetStreetMirror',
+  name: 'WetLotMirror',
   uniforms: {
     color: { value: null },
     tDiffuse: { value: null },
@@ -124,23 +127,23 @@ const MIRROR_SHADER = {
   `,
 };
 
-export interface Street {
+export interface Lot {
   /** Matches the mirror's resolution to the canvas. */
   setSize(width: number, height: number): void;
   dispose(): void;
 }
 
-export function buildStreet(scene: THREE.Scene): Street {
+export function buildLot(scene: THREE.Scene): Lot {
   const group = new THREE.Group();
-  group.name = 'street';
+  group.name = 'lot';
   scene.add(group);
   const owned: { dispose(): void }[] = [];
   const own = <T extends { dispose(): void }>(x: T) => (owned.push(x), x);
 
   // Lit asphalt underneath the mirror.
-  // The mirror supplies the road's reflections, so the sky map is off here.
+  // The mirror supplies the ground's reflections, so the sky map is off here.
   // Its own highlights are kept low too: broad glare from the fill lights
-  // washed the whole road out.
+  // washed the whole lot out.
   const asphalt = own(
     new THREE.MeshPhysicalMaterial({ color: '#16181c', roughness: 0.6, metalness: 0, envMapIntensity: 0, specularIntensity: 0.12 }),
   );
@@ -169,19 +172,19 @@ export function buildStreet(scene: THREE.Scene): Street {
         roughnessFactor = mix(roughnessFactor, 0.08, sPuddle);`,
       );
   };
-  const roadGeometry = own(new THREE.PlaneGeometry(120, 120));
-  const road = new THREE.Mesh(roadGeometry, asphalt);
-  road.rotation.x = -Math.PI / 2;
-  road.name = 'road';
-  group.add(road);
+  const groundGeometry = own(new THREE.PlaneGeometry(120, 120));
+  const ground = new THREE.Mesh(groundGeometry, asphalt);
+  ground.rotation.x = -Math.PI / 2;
+  ground.name = 'ground';
+  group.add(ground);
 
-  const mirror = new Reflector(roadGeometry, {
+  const mirror = new Reflector(groundGeometry, {
     textureWidth: 512,
     textureHeight: 512,
     multisample: 0,
     shader: MIRROR_SHADER,
   });
-  mirror.name = 'roadMirror';
+  mirror.name = 'groundMirror';
   mirror.rotation.x = -Math.PI / 2;
   mirror.position.y = 0.002;
   const mirrorMaterial = mirror.material as THREE.ShaderMaterial;
@@ -194,34 +197,39 @@ export function buildStreet(scene: THREE.Scene): Street {
   target.texture.minFilter = THREE.LinearMipmapLinearFilter;
   group.add(mirror);
 
-  // Curb and sidewalk on the car's left.
-  const concrete = own(new THREE.MeshStandardMaterial({ color: '#1d1f22', roughness: 0.7, envMapIntensity: 0.3 }));
-  const sidewalk = new THREE.Mesh(own(new THREE.BoxGeometry(120, CURB_HEIGHT, SIDEWALK_WIDTH)), concrete);
-  sidewalk.position.set(0, CURB_HEIGHT / 2, CURB_Z - SIDEWALK_WIDTH / 2);
-  group.add(sidewalk);
-  const curbEdge = new THREE.Mesh(
-    own(new THREE.BoxGeometry(120, CURB_HEIGHT + 0.004, 0.18)),
-    own(new THREE.MeshStandardMaterial({ color: '#3a3c40', roughness: 0.6 })),
-  );
-  curbEdge.position.set(0, CURB_HEIGHT / 2 + 0.002, CURB_Z - 0.09);
-  group.add(curbEdge);
-
-  // Street lamps: warm heads that glow (and reflect) plus a dim pool of light.
-  const pole = own(new THREE.MeshStandardMaterial({ color: '#1c1e22', roughness: 0.5, metalness: 0.4 }));
+  // Planted islands at the head of each pair of rows: a concrete curb
+  // around dark mulch, with the lot's light poles.
+  const curb = own(new THREE.MeshStandardMaterial({ color: '#3a3c40', roughness: 0.6 }));
+  const mulch = own(new THREE.MeshStandardMaterial({ color: '#121410', roughness: 0.95, envMapIntensity: 0.2 }));
+  const curbGeometry = own(new THREE.BoxGeometry(ISLAND, CURB_HEIGHT, 120));
+  const mulchGeometry = own(new THREE.BoxGeometry(ISLAND - 0.3, 0.01, 120));
+  const pole = own(new THREE.MeshStandardMaterial({ color: '#2a2c30', roughness: 0.5, metalness: 0.4 }));
   const head = own(new THREE.MeshStandardMaterial({ color: '#000', emissive: LAMP_COLOR, emissiveIntensity: 2.2 }));
-  const poleGeometry = own(new THREE.CylinderGeometry(0.06, 0.09, LAMP_HEIGHT, 10));
-  const armGeometry = own(new THREE.BoxGeometry(0.06, 0.06, 1.3));
-  const headGeometry = own(new THREE.BoxGeometry(0.5, 0.06, 0.22));
-  for (const [x, z] of LAMPS) {
-    const post = new THREE.Mesh(poleGeometry, pole);
-    post.position.set(x, LAMP_HEIGHT / 2 + CURB_HEIGHT, z);
-    const arm = new THREE.Mesh(armGeometry, pole);
-    arm.position.set(x, LAMP_HEIGHT + CURB_HEIGHT, z + 0.62);
-    const glow = new THREE.Mesh(headGeometry, head);
-    glow.position.set(x, LAMP_HEIGHT + CURB_HEIGHT - 0.05, z + 1.2);
-    const light = new THREE.PointLight(LAMP_COLOR, 9, 16, 1.6);
-    light.position.copy(glow.position).add(new THREE.Vector3(0, -0.3, 0));
-    group.add(post, arm, glow, light);
+  const poleGeometry = own(new THREE.CylinderGeometry(0.07, 0.1, LAMP_HEIGHT, 10));
+  const headGeometry = own(new THREE.BoxGeometry(0.7, 0.12, 0.7));
+  const baseGeometry = own(new THREE.CylinderGeometry(0.25, 0.25, 0.5, 12));
+  for (let k = -2; k <= 2; k++) {
+    const x = HEAD_X + ISLAND / 2 + k * MODULE;
+    const island = new THREE.Mesh(curbGeometry, curb);
+    island.position.set(x, CURB_HEIGHT / 2, 0);
+    const bed = new THREE.Mesh(mulchGeometry, mulch);
+    bed.position.set(x, CURB_HEIGHT + 0.005, 0);
+    group.add(island, bed);
+    for (const z of POLE_Z) {
+      const base = new THREE.Mesh(baseGeometry, curb);
+      base.position.set(x, CURB_HEIGHT + 0.25, z);
+      const post = new THREE.Mesh(poleGeometry, pole);
+      post.position.set(x, CURB_HEIGHT + LAMP_HEIGHT / 2, z);
+      const glow = new THREE.Mesh(headGeometry, head);
+      glow.position.set(x, CURB_HEIGHT + LAMP_HEIGHT, z);
+      group.add(base, post, glow);
+      // Only the nearest island's lamps cast light; farther ones just glow.
+      if (k === 0 || k === -1) {
+        const light = new THREE.PointLight(LAMP_COLOR, 60, 24, 1.5);
+        light.position.copy(glow.position).add(new THREE.Vector3(0, -0.3, 0));
+        group.add(light);
+      }
+    }
   }
 
   return {
@@ -242,7 +250,7 @@ export function buildStreet(scene: THREE.Scene): Street {
  * horizon and a few far-off lamps, so glossy paint reads as glossy without
  * bright studio panels that could be mistaken for the show's lights.
  */
-export function streetEnvironment(): THREE.Scene {
+export function lotEnvironment(): THREE.Scene {
   const env = new THREE.Scene();
   const sky = new THREE.SphereGeometry(50, 32, 16);
   const colors: number[] = [];
@@ -273,7 +281,7 @@ export function streetEnvironment(): THREE.Scene {
     m.position.set(x, 9, z);
     env.add(m);
   }
-  // A faint, broad glow overhead: city sky.
+  // A faint, broad glow overhead: the city beyond the lot.
   const glow = new THREE.Mesh(new THREE.PlaneGeometry(40, 40), new THREE.MeshBasicMaterial({ color: '#1b2230', side: THREE.DoubleSide }));
   glow.rotation.x = Math.PI / 2;
   glow.position.y = 30;
