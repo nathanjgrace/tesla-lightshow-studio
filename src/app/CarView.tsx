@@ -1,12 +1,11 @@
 import { Rotate3d } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
-import { parsePaintChoice, resolvePaint, type PaintChoice } from '../core/paint';
 import type { Simulation } from '../core/simulate';
 import type { VehicleProfile } from '../core/vehicles';
 import { CAMERA_PRESETS, CarScene } from './car/CarScene';
 import { warpFor } from './car/derive';
 import { loadTeslaAsset, teslaMeshFor, type TeslaAsset } from './car/teslaAssets';
-import { PaintPicker } from './PaintPicker';
+import type { CarLook } from './carLook';
 import type { Playback } from './playback';
 
 function stored(key: string): string | null {
@@ -30,21 +29,14 @@ const storedFlag = (key: string, fallback: boolean) => {
   return v === null ? fallback : v === '1';
 };
 
-// Paint is remembered per vehicle version, since each has its own colors.
-const paintKey = (vehicle: VehicleProfile) => `paint:${vehicle.id}`;
-
 type ModelState = { model: string; progress: number; asset?: TeslaAsset; failed?: boolean };
 
-export function CarView({ sim, vehicle, playback }: { sim: Simulation | undefined; vehicle: VehicleProfile; playback: Playback }) {
+export function CarView({ sim, vehicle, playback, look }: { sim: Simulation | undefined; vehicle: VehicleProfile; playback: Playback; look: CarLook }) {
   const body = vehicle.body;
   const host = useRef<HTMLDivElement>(null);
   const [scene, setScene] = useState<CarScene>();
   const [error, setError] = useState<string>();
-  // Older versions stored the reflections toggle as finish=glossy.
-  const [reflections, setReflections] = useState(() => storedFlag('reflections', stored('finish') === 'glossy'));
   const [spin, setSpin] = useState(() => storedFlag('autoRotate', true));
-  const [paints, setPaints] = useState<Record<string, PaintChoice | undefined>>({});
-  const paint = vehicle.id in paints ? paints[vehicle.id] : parsePaintChoice(stored(paintKey(vehicle)));
 
   useEffect(() => {
     scene?.setAutoRotate(spin);
@@ -58,10 +50,8 @@ export function CarView({ sim, vehicle, playback }: { sim: Simulation | undefine
     return playback.subscribeState(update);
   }, [scene, playback]);
 
-  useEffect(() => {
-    scene?.setReflections(reflections);
-    store('reflections', reflections ? '1' : '0');
-  }, [scene, reflections]);
+  const { reflections, hex, finish } = look;
+  useEffect(() => scene?.setReflections(reflections), [scene, reflections]);
 
   useEffect(() => {
     const el = host.current!;
@@ -103,13 +93,7 @@ export function CarView({ sim, vehicle, playback }: { sim: Simulation | undefine
 
   useEffect(() => scene?.setBody(body, asset), [scene, body, asset]);
 
-  const { hex, finish } = resolvePaint(paint, vehicle.id);
   useEffect(() => scene?.setPaint(hex, finish), [scene, hex, finish]);
-
-  const choosePaint = (choice: PaintChoice) => {
-    setPaints((p) => ({ ...p, [vehicle.id]: choice }));
-    store(paintKey(vehicle), JSON.stringify(choice));
-  };
 
   useEffect(() => {
     if (!scene) return;
@@ -133,7 +117,6 @@ export function CarView({ sim, vehicle, playback }: { sim: Simulation | undefine
               : 'Stylized preview'}
         </span>
       </div>
-      <PaintPicker vehicle={vehicle} choice={paint} onChange={choosePaint} reflections={reflections} onReflections={setReflections} />
       <div className="camera-presets" role="group" aria-label="Camera views">
         <button
           className={`icon-toggle${spin ? ' on' : ''}`}

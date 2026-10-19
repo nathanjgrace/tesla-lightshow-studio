@@ -36,9 +36,11 @@ interface Props {
   onChange: (choice: PaintChoice) => void;
   reflections: boolean;
   onReflections: (on: boolean) => void;
+  /** Just the swatch, for the toolbar. */
+  compact?: boolean;
 }
 
-export function PaintPicker({ vehicle, choice, onChange, reflections, onReflections }: Props) {
+export function PaintPicker({ vehicle, choice, onChange, reflections, onReflections, compact }: Props) {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
   const offers = factoryPaints(vehicle.id);
@@ -74,17 +76,22 @@ export function PaintPicker({ vehicle, choice, onChange, reflections, onReflecti
       : '';
 
   return (
-    <div className="paint-picker" ref={ref}>
+    <div className={`paint-picker${compact ? ' compact' : ''}`} ref={ref}>
       <button
         className={`paint-trigger${open ? ' open' : ''}`}
         onClick={() => setOpen((o) => !o)}
         aria-haspopup="dialog"
         aria-expanded={open}
-        title="Paint (preview only)"
+        aria-label={`Paint: ${current.name}`}
+        title={`Paint: ${current.name} (preview only)`}
       >
         <span className="paint-dot" style={swatchStyle(current.hex, current.finish)} />
-        <span className="truncate">{current.name}</span>
-        <ChevronDown size={13} className="menu-chevron" />
+        {!compact && (
+          <>
+            <span className="truncate">{current.name}</span>
+            <ChevronDown size={13} className="menu-chevron" />
+          </>
+        )}
       </button>
       {open && (
         <div className="paint-panel" role="dialog" aria-label="Paint">

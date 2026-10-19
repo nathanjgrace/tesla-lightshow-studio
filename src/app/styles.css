@@ -181,6 +181,67 @@ input {
   justify-content: flex-end;
 }
 
+/* The song shrinks first; everything else on the left keeps its size. */
+.tb-left > * {
+  flex: none;
+}
+
+.tb-left > .file-menu {
+  flex: 0 1 auto;
+  min-width: 90px;
+}
+
+.tb-left > .file-menu .menu-trigger {
+  max-width: 100%;
+}
+
+@media (max-width: 1320px) {
+  .brand-name {
+    display: none;
+  }
+}
+
+/* Paint swatch and car model as one compact pill. */
+.car-chip {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+}
+
+.car-chip .paint-trigger {
+  width: 30px;
+  height: 30px;
+  padding: 0;
+  justify-content: center;
+  border: 0;
+  border-right: 1px solid var(--border);
+  border-radius: var(--radius) 0 0 var(--radius);
+  background: transparent;
+  backdrop-filter: none;
+}
+
+.car-chip .menu-trigger {
+  border: 0;
+  border-radius: 0 var(--radius) var(--radius) 0;
+  background: transparent;
+  max-width: 150px;
+}
+
+.paint-picker.compact {
+  position: relative;
+  top: auto;
+  right: auto;
+  z-index: 30;
+}
+
+.paint-picker.compact .paint-panel {
+  left: 0;
+  right: auto;
+}
+
 .brand {
   display: flex;
   align-items: center;
@@ -300,7 +361,7 @@ button.export {
 }
 
 .file-menu .menu-trigger {
-  max-width: 340px;
+  max-width: 300px;
   font-weight: 550;
 }
 

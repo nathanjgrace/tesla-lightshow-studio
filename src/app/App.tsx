@@ -1,5 +1,4 @@
 import {
-  Car,
   CircleCheck,
   CircleHelp,
   Columns2,
@@ -43,6 +42,8 @@ import { DEFAULT_SHOW_ID, LIBRARY, type LibraryShow } from '../library/catalog';
 import { AUDIO_ACCEPT, audioType, fromZip, isAudioFile, loadLibraryShow, type LoadedFiles } from '../library/load';
 import { audioDurationMs, computePeaks, type Peaks } from './audio';
 import { CarView } from './CarView';
+import { shortVehicleName, useCarLook } from './carLook';
+import { PaintPicker } from './PaintPicker';
 import { Shortcuts } from './Shortcuts';
 import { Composer, type Range } from './Composer';
 import { ComposerBar } from './ComposerBar';
@@ -112,6 +113,7 @@ export function App() {
   const [vehicle, setVehicle] = useState<VehicleProfile>(
     () => VEHICLES_BY_ID.get(stored('vehicle') ?? '') ?? VEHICLES_BY_ID.get(DEFAULT_VEHICLE_ID)!,
   );
+  const look = useCarLook(vehicle);
   const [carMode, setCarMode] = useState<CarMode>('single');
   const [doc, setDoc] = useState<Doc>();
   const [range, setRange] = useState<Range>({ startMs: 0, endMs: 0 });
@@ -555,6 +557,36 @@ export function App() {
               e.target.value = '';
             }}
           />
+          <div className="car-chip" role="group" aria-label="Car and paint">
+            <PaintPicker
+              compact
+              vehicle={vehicle}
+              choice={look.paint}
+              onChange={look.choosePaint}
+              reflections={look.reflections}
+              onReflections={look.setReflections}
+            />
+            <Menu
+              className="car-menu"
+              title={`Car: ${vehicle.name}`}
+              label={<span className="truncate">{shortVehicleName(vehicle.name)}</span>}
+              sections={[
+                ...vehiclesByModel().map((m) => ({
+                  label: m.name,
+                  items: m.variants.map((v) => ({ id: v.id, label: v.variant, hint: v.hint, checked: v.id === vehicle.id, onSelect: () => chooseVehicle(v) })),
+                })),
+                { items: [{ id: 'vin', label: 'Look up by VIN…', hint: 'Find your exact version', icon: <Search size={15} />, onSelect: () => setModal('vin') }] },
+              ]}
+            />
+          </div>
+          <div className="segmented" role="group" aria-label="Layout">
+            <button className={layout === 'side' ? 'on' : ''} onClick={() => chooseLayout('side')} title="Side by side">
+              <Columns2 size={15} />
+            </button>
+            <button className={layout === 'stack' ? 'on' : ''} onClick={() => chooseLayout('stack')} title="Top and bottom">
+              <Rows2 size={15} />
+            </button>
+          </div>
         </div>
 
         <div className="tb-center transport">
@@ -572,37 +604,12 @@ export function App() {
         </div>
 
         <div className="tb-right">
-          <Menu
-            title="Choose your car"
-            align="right"
-            label={
-              <>
-                <Car size={15} />
-                <span className="truncate">{vehicle.name}</span>
-              </>
-            }
-            sections={[
-              ...vehiclesByModel().map((m) => ({
-                label: m.name,
-                items: m.variants.map((v) => ({ id: v.id, label: v.variant, hint: v.hint, checked: v.id === vehicle.id, onSelect: () => chooseVehicle(v) })),
-              })),
-              { items: [{ id: 'vin', label: 'Look up by VIN…', hint: 'Find your exact version', icon: <Search size={15} />, onSelect: () => setModal('vin') }] },
-            ]}
-          />
           <div className="segmented" role="group" aria-label="Number of cars">
             <button className={carMode === 'single' ? 'on' : ''} onClick={() => setCarMode('single')} title="Single car">
               <User size={15} />
             </button>
             <button className={carMode === 'multi' ? 'on' : ''} onClick={() => setCarMode('multi')} title="Multiple cars (coming later)">
               <Users size={15} />
-            </button>
-          </div>
-          <div className="segmented" role="group" aria-label="Layout">
-            <button className={layout === 'side' ? 'on' : ''} onClick={() => chooseLayout('side')} title="Side by side">
-              <Columns2 size={15} />
-            </button>
-            <button className={layout === 'stack' ? 'on' : ''} onClick={() => chooseLayout('stack')} title="Top and bottom">
-              <Rows2 size={15} />
             </button>
           </div>
           {show && (
@@ -652,7 +659,7 @@ export function App() {
         style={{ gridTemplate: layout === 'side' ? `1fr / ${split}fr 5px ${1 - split}fr` : `${split}fr 5px ${1 - split}fr / 1fr` }}
       >
         <section className="pane car-pane">
-          <CarView sim={sim} vehicle={vehicle} playback={playback} />
+          <CarView sim={sim} vehicle={vehicle} playback={playback} look={look} />
         </section>
         <div className="splitter" onPointerDown={startDrag} role="separator" aria-orientation={layout === 'side' ? 'vertical' : 'horizontal'} />
         <section className="pane composer">
