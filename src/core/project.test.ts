@@ -1,7 +1,7 @@
 import { existsSync, readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
-import { channel } from './channels';
-import { CLOSURE_BYTES, LIGHT_BYTES } from './encoding';
+import { channel, CHANNELS_BY_ID } from './channels';
+import { CLOSURE_BYTES, decodeClosure, LIGHT_BYTES } from './encoding';
 import { readFseq } from './fseq';
 import {
   blankProject,
@@ -13,7 +13,9 @@ import {
   projectFromShow,
   type Effect,
 } from './project';
+import { simulate } from './simulate';
 import { blankShow, fill } from './testing';
+import { VEHICLES_BY_ID } from './vehicles';
 
 const fx = (channelId: string, startMs: number, endMs: number, kind: Effect['kind'], extra: Partial<Effect> = {}): Effect => ({
   id: newEffectId(),
@@ -126,5 +128,54 @@ describe('mirroring and families', () => {
     expect(effectFamily('leftFrontFog')).toBe('light');
     expect(effectFamily('liftgate')).toBe('closure');
     expect(effectFamily('frontLightBar1')).toBeUndefined();
+  });
+});
+
+describe('move to a position', () => {
+  const at = (show: ReturnType<typeof compileProject>, id: string, ms: number) =>
+    simulate(show, VEHICLES_BY_ID.get('modelX-2021')!).closures.get(id)!.position[Math.round(ms / show.stepTimeMs)]!;
+  const fx = (startMs: number, endMs: number, targetPct: number, channel = 'leftFrontWindow') => ({ id: `m${startMs}`, channel, startMs, endMs, kind: 'move' as const, targetPct });
+
+  it('opens partway and stops there, then closes partway', () => {
+    // Windows take about 4 s each way.
+    const show = compileProject({ ...blankProject(20000), effects: [fx(1000, 6000, 50), fx(8000, 12000, 20)] });
+    expect(at(show, 'leftFrontWindow', 5500)).toBeCloseTo(0.5, 1);
+    expect(at(show, 'leftFrontWindow', 7900)).toBeCloseTo(0.5, 1);
+    expect(at(show, 'leftFrontWindow', 15000)).toBeCloseTo(0.2, 1);
+    // One open, one close, each followed by a stop.
+    const index = CHANNELS_BY_ID.get('leftFrontWindow')!.index;
+    const commands = new Set<string>();
+    for (let f = 0; f < show.frameCount; f++) commands.add(decodeClosure(show.data[f * show.channelCount + index]!));
+    expect([...commands].sort()).toEqual(['close', 'idle', 'open', 'stop']);
+  });
+
+  it('needs no stop to go fully open or closed, and does nothing when already there', () => {
+    const show = compileProject({ ...blankProject(20000), effects: [fx(1000, 6000, 100), fx(7000, 9000, 100), fx(10000, 16000, 0)] });
+    expect(at(show, 'leftFrontWindow', 6500)).toBeCloseTo(1, 2);
+    expect(at(show, 'leftFrontWindow', 16000)).toBeCloseTo(0, 2);
+    const index = CHANNELS_BY_ID.get('leftFrontWindow')!.index;
+    let stops = 0;
+    let opens = 0;
+    for (let f = 0; f < show.frameCount; f++) {
+      const c = decodeClosure(show.data[f * show.channelCount + index]!);
+      if (c === 'stop') stops++;
+      if (c === 'open' && (f === 0 || decodeClosure(show.data[(f - 1) * show.channelCount + index]!) !== 'open')) opens++;
+    }
+    expect(stops).toBe(0);
+    expect(opens).toBe(1);
+  });
+
+  it('stops where it got to when the effect is shorter than the travel', () => {
+    const show = compileProject({ ...blankProject(20000), effects: [fx(1000, 2000, 100)] });
+    expect(at(show, 'leftFrontWindow', 5000)).toBeCloseTo(0.25, 1);
+  });
+
+  it('starts from wherever earlier commands left the closure', () => {
+    const show = compileProject({
+      ...blankProject(20000),
+      effects: [{ id: 'o', channel: 'leftFrontWindow', startMs: 0, endMs: 500, kind: 'open' }, fx(6000, 12000, 25)],
+    });
+    expect(at(show, 'leftFrontWindow', 5000)).toBeCloseTo(1, 2);
+    expect(at(show, 'leftFrontWindow', 11000)).toBeCloseTo(0.25, 1);
   });
 });

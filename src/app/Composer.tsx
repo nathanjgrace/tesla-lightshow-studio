@@ -12,7 +12,7 @@ import type { Analysis, SectionKind } from '../core/analysis';
 import { CHANNELS_BY_ID } from '../core/channels';
 import { decodeClosure, type ClosureCommand } from '../core/encoding';
 import type { FseqFile } from '../core/fseq';
-import { EFFECT_LABELS, effectFamily, newEffectId, placeEffects, type Effect } from '../core/project';
+import { effectFamily, effectLabel, newEffectId, placeEffects, type Effect } from '../core/project';
 import type { Simulation } from '../core/simulate';
 import { formatTime } from '../core/validate';
 import type { ChannelGroup, VehicleProfile } from '../core/vehicles';
@@ -25,6 +25,8 @@ const RULER_H = 24;
 const WAVE_H = 56;
 const ROW_H = 20;
 const GROUP_H = 26;
+/** Closure rows are taller: they show how far open the closure is and take a target height for moves. */
+const CLOSURE_H = 36;
 const HEADER_H = RULER_H + WAVE_H;
 const EDGE_PX = 6;
 
@@ -110,7 +112,7 @@ export function buildRows(profile: VehicleProfile): Row[] {
   return rows;
 }
 
-const rowHeight = (r: Row) => (r.type === 'group' ? GROUP_H : ROW_H);
+const rowHeight = (r: Row) => (r.type === 'group' ? GROUP_H : r.type === 'closure' ? CLOSURE_H : ROW_H);
 const rowChannel = (r: Row): string | undefined =>
   r.type === 'closure' ? r.id : r.type === 'light' && r.editable ? r.ids[0] : undefined;
 
@@ -197,7 +199,7 @@ export function Composer(props: Props) {
     type Drag =
       | { kind: 'seek' }
       | { kind: 'range'; which: 'start' | 'end' | 'move'; grabMs: number; startMs: number; endMs: number }
-      | { kind: 'create'; row: number; channel: string; anchorMs: number; moved: boolean }
+      | { kind: 'create'; row: number; channel: string; anchorMs: number; moved: boolean; targetPct: number }
       | {
           kind: 'edit';
           edge: 'start' | 'end' | 'body';
@@ -373,9 +375,23 @@ export function Composer(props: Props) {
           flush(fb);
           const track = sim.closures.get(row.id);
           if (track) {
+            // How far open, as a filled area (top of the row = fully open), with a halfway guide.
+            sctx.fillStyle = 'rgba(255,255,255,0.06)';
+            for (let gx = LABEL_W; gx < width; gx += 6) sctx.fillRect(gx, Math.round(y + h / 2), 3, 1);
+            sctx.beginPath();
+            sctx.moveTo(LABEL_W, y + h - 4);
+            for (let x = LABEL_W; x < width; x++) {
+              const f = Math.min(sim.frameCount - 1, frameOf(msOf(x)));
+              sctx.lineTo(x, y + h - 4 - track.position[f]! * (h - 8));
+            }
+            sctx.lineTo(width, y + h - 4);
+            sctx.closePath();
+            sctx.fillStyle = C.position;
+            sctx.globalAlpha = 0.16;
+            sctx.fill();
+            sctx.globalAlpha = 0.85;
             sctx.strokeStyle = C.position;
-            sctx.globalAlpha = 0.75;
-            sctx.lineWidth = 1;
+            sctx.lineWidth = 1.25;
             sctx.beginPath();
             for (let x = LABEL_W; x < width; x++) {
               const f = Math.min(sim.frameCount - 1, frameOf(msOf(x)));
@@ -405,7 +421,7 @@ export function Composer(props: Props) {
             if (w > 46) {
               sctx.fillStyle = selected ? '#fff' : 'rgba(255,255,255,0.78)';
               sctx.font = '500 10px Inter Variable, system-ui, sans-serif';
-              sctx.fillText(fitText(sctx, EFFECT_LABELS[e.kind], w - 10), Math.max(xa, LABEL_W) + 5, y + h / 2 + 3.5);
+              sctx.fillText(fitText(sctx, effectLabel(e), w - 10), Math.max(xa, LABEL_W) + 5, y + h / 2 + 3.5);
             }
             if (selected && w > 14) {
               sctx.fillStyle = C.selection;
@@ -586,7 +602,7 @@ export function Composer(props: Props) {
         const y = HEADER_H + rowTops[createPreview.row]! - view.scrollY;
         ctx.strokeStyle = C.selection;
         ctx.setLineDash([4, 3]);
-        roundRect(ctx, xOf(createPreview.a) + 0.5, y + 2.5, xOf(createPreview.b) - xOf(createPreview.a), ROW_H - 5, 4);
+        roundRect(ctx, xOf(createPreview.a) + 0.5, y + 2.5, xOf(createPreview.b) - xOf(createPreview.a), rowHeight(rows[createPreview.row]!) - 5, 4);
         ctx.stroke();
         ctx.setLineDash([]);
       }
@@ -677,6 +693,14 @@ export function Composer(props: Props) {
       return -1;
     }
 
+    /** On a closure row, how far open a height means (top = fully open), in steps of 5%. */
+    function pctAt(row: number, y: number): number {
+      const top = HEADER_H + rowTops[row]! - view.scrollY;
+      const h = rowHeight(rows[row]!);
+      const p = 1 - (y - top - 4) / (h - 8);
+      return Math.round(Math.min(1, Math.max(0, p)) * 20) * 5;
+    }
+
     /** The lane under (or nearest below) a y position, for dragging between channels. */
     function laneAt(y: number): number {
       const r = rowAt(y);
@@ -761,7 +785,7 @@ export function Composer(props: Props) {
         // Shift-drag on empty space: box-select, adding to the selection.
         drag = { kind: 'marquee', x0: x, y0: y, x1: x, y1: y, base: new Set(editor.selection) };
       } else if (h.zone === 'empty') {
-        drag = { kind: 'create', row: h.row, channel: h.channel, anchorMs: snapMs(t, e.altKey), moved: false };
+        drag = { kind: 'create', row: h.row, channel: h.channel, anchorMs: snapMs(t, e.altKey), moved: false, targetPct: pctAt(h.row, y) };
       } else if (h.zone === 'effect') {
         const additive = e.shiftKey || e.metaKey || e.ctrlKey;
         const selected = editor.selection.has(h.effect.id);
@@ -907,7 +931,7 @@ export function Composer(props: Props) {
         const startMs = Math.min(current.anchorMs, b);
         const endMs = Math.max(current.anchorMs, b, startMs + d().show.stepTimeMs);
         const kind = effectFamily(current.channel) === 'closure' ? editor.closureBrush : editor.lightBrush;
-        editor.place([{ id: newEffectId(), channel: current.channel, startMs, endMs, kind }]);
+        editor.place([{ id: newEffectId(), channel: current.channel, startMs, endMs, kind, ...(kind === 'move' ? { targetPct: current.targetPct } : {}) }]);
       } else if (current.kind === 'marquee') {
         // A plain shift-click on empty space just seeks.
         if (Math.abs(current.x1 - current.x0) < 3 && Math.abs(current.y1 - current.y0) < 3) d().playback.seek(msOf(current.x0));
@@ -933,7 +957,12 @@ export function Composer(props: Props) {
       const editor = d().editor;
       const startMs = snapMs(msOf(x), e.altKey);
       const kind = effectFamily(h.channel) === 'closure' ? editor.closureBrush : editor.lightBrush;
-      editor.place([{ id: newEffectId(), channel: h.channel, startMs, endMs: Math.min(durationMs(), startMs + 1000), kind }]);
+      // A move gets as long as a full open or close, so it has time to get there.
+      const info = CHANNELS_BY_ID.get(h.channel)?.closure;
+      const length = kind === 'move' && info ? Math.max(info.openSeconds, info.closeSeconds) * 1000 : 1000;
+      editor.place([
+        { id: newEffectId(), channel: h.channel, startMs, endMs: Math.min(durationMs(), startMs + length), kind, ...(kind === 'move' ? { targetPct: pctAt(h.row, y) } : {}) },
+      ]);
     }
 
     cv.addEventListener('wheel', onWheel, { passive: false });

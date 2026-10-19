@@ -6,6 +6,7 @@ import {
   DoorClosed,
   DoorOpen,
   FlipHorizontal2,
+  Gauge,
   Lightbulb,
   Magnet,
   Maximize2,
@@ -24,6 +25,7 @@ import type { ReactNode } from 'react';
 import { CHANNELS_BY_ID } from '../core/channels';
 import {
   CLOSURE_KINDS,
+  DEFAULT_MOVE_PCT,
   DEFAULT_STROBE_MS,
   EFFECT_HOTKEYS,
   EFFECT_LABELS,
@@ -51,6 +53,7 @@ const LIGHT_BRUSHES: { kind: LightEffectKind; icon: ReactNode; text?: string }[]
 
 const CLOSURE_BRUSHES: { kind: ClosureEffectKind; icon: ReactNode }[] = [
   { kind: 'open', icon: <DoorOpen size={15} /> },
+  { kind: 'move', icon: <Gauge size={15} /> },
   { kind: 'dance', icon: <Waves size={15} /> },
   { kind: 'close', icon: <DoorClosed size={15} /> },
   { kind: 'stop', icon: <Square size={13} /> },
@@ -101,7 +104,7 @@ export function ComposerBar({ editor, lead, onMirror, onDelete, onChangeSelected
         {CLOSURE_BRUSHES.map((b) => (
           <IconButton
             key={b.kind}
-            title={`${EFFECT_LABELS[b.kind]}${b.kind === 'stop' ? ' (F on a door row)' : hotkeyFor(b.kind) ? ` (${hotkeyFor(b.kind)})` : ''}`}
+            title={b.kind === 'move' ? 'Move to a position: click higher on the row to open further' : `${EFFECT_LABELS[b.kind]}${b.kind === 'stop' ? ' (F on a door row)' : hotkeyFor(b.kind) ? ` (${hotkeyFor(b.kind)})` : ''}`}
             active={editor.closureBrush === b.kind}
             onClick={() => editor.setClosureBrush(b.kind)}
           >
@@ -156,6 +159,29 @@ export function ComposerBar({ editor, lead, onMirror, onDelete, onChangeSelected
             </select>
             <TimeField label="Start" ms={single.startMs} onChange={(v) => onChangeSelected((fx) => ({ ...fx, startMs: v, endMs: v + (fx.endMs - fx.startMs) }))} />
             <TimeField label="Length" ms={single.endMs - single.startMs} onChange={(v) => onChangeSelected((fx) => ({ ...fx, endMs: fx.startMs + Math.max(20, v) }))} />
+            {single.kind === 'move' && (
+              <label className="inspector-pct">
+                <span>Open</span>
+                <input
+                  type="range"
+                  min={0}
+                  max={100}
+                  step={5}
+                  value={single.targetPct ?? DEFAULT_MOVE_PCT}
+                  onChange={(e) => onChangeSelected((fx) => ({ ...fx, targetPct: Number(e.target.value) }))}
+                  aria-label="How far open"
+                />
+                <input
+                  type="number"
+                  min={0}
+                  max={100}
+                  value={Math.round(single.targetPct ?? DEFAULT_MOVE_PCT)}
+                  onChange={(e) => onChangeSelected((fx) => ({ ...fx, targetPct: Math.min(100, Math.max(0, Number(e.target.value) || 0)) }))}
+                  aria-label="Percent open"
+                />
+                <span>%</span>
+              </label>
+            )}
             {single.kind === 'strobe' && (
               <TimeField
                 label="Rate"

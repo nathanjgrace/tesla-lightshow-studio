@@ -102,15 +102,23 @@ function channel4Leader(id: string): string | undefined {
   return match ? `${match[1]}Channel4` : undefined;
 }
 
+/** Where a closure rests (0 closed .. 1 open, dance motion aside) at the start of a frame. */
+export function closurePositionAt(show: FseqFile, id: string, frame: number): number {
+  if (frame <= 0) return id.endsWith('Mirror') ? 1 : 0;
+  const byteAt = (f: number, index: number) => (index < show.channelCount ? show.data[f * show.channelCount + index]! : 0);
+  return simulateClosure({ ...show, frameCount: frame }, id, byteAt).rest[frame - 1]!;
+}
+
 function simulateClosure(
   show: FseqFile,
   id: string,
   byteAt: (frame: number, index: number) => number,
-): ClosureTrack {
+): ClosureTrack & { rest: Float32Array } {
   const { frameCount, stepTimeMs } = show;
   const def = channel(id);
   const info = def.closure!;
   const position = new Float32Array(frameCount);
+  const rest = new Float32Array(frameCount);
   const dancing = new Uint8Array(frameCount);
   const isWindow = id.endsWith('Window');
   // The charge port's "dance" flashes its LED instead of moving the door.
@@ -153,6 +161,7 @@ function simulateClosure(
       danceStartFrame = -1;
       position[f] = base;
     }
+    rest[f] = base;
   }
-  return { position, dancing };
+  return { position, dancing, rest };
 }

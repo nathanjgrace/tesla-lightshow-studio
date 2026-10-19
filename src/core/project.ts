@@ -5,11 +5,13 @@
 
 import { CHANNEL_COUNT, CHANNELS, CHANNELS_BY_ID } from './channels';
 import { CLOSURE_BYTES, LIGHT_BYTES, type ClosureCommand, type LightCommand } from './encoding';
+import { closurePositionAt } from './simulate';
 import type { FseqFile } from './fseq';
 
 /** Light effects: Tesla's on/ramp commands, plus strobe (alternating on/off). */
 export type LightEffectKind = Exclude<LightCommand, 'off'> | 'strobe';
-export type ClosureEffectKind = Exclude<ClosureCommand, 'idle'>;
+/** Tesla's closure commands, plus `move`: go to a position (`targetPct`), made from open or close followed by stop. */
+export type ClosureEffectKind = Exclude<ClosureCommand, 'idle'> | 'move';
 export type EffectKind = LightEffectKind | ClosureEffectKind;
 
 export interface Effect {
@@ -20,6 +22,8 @@ export interface Effect {
   kind: EffectKind;
   /** Strobe: one on/off cycle, in ms. */
   periodMs?: number;
+  /** Move: how far open to go, 0 (closed) to 100 (fully open). */
+  targetPct?: number;
 }
 
 export interface Project {
@@ -32,7 +36,8 @@ export interface Project {
 }
 
 export const LIGHT_KINDS: readonly LightEffectKind[] = ['on', 'on500', 'on1000', 'on2000', 'off500', 'off1000', 'off2000', 'strobe'];
-export const CLOSURE_KINDS: readonly ClosureEffectKind[] = ['open', 'dance', 'close', 'stop'];
+export const CLOSURE_KINDS: readonly ClosureEffectKind[] = ['open', 'move', 'dance', 'close', 'stop'];
+export const DEFAULT_MOVE_PCT = 50;
 export const DEFAULT_STROBE_MS = 200;
 
 export function isClosureKind(kind: EffectKind): kind is ClosureEffectKind {
@@ -101,19 +106,55 @@ export function effectFrames(e: Effect, stepTimeMs: number, frameCount: number):
 export function compileProject(project: Project): FseqFile {
   const { frameCount, channelCount, stepTimeMs } = project;
   const data = project.base.slice();
+  const moves: Effect[] = [];
   for (const e of project.effects) {
     const def = CHANNELS_BY_ID.get(e.channel);
     if (!def || def.index >= channelCount) continue;
+    if (e.kind === 'move') {
+      moves.push(e);
+      continue;
+    }
     const [first, last] = effectFrames(e, stepTimeMs, frameCount);
     if (e.kind === 'strobe') {
       const period = Math.max(2, Math.round((e.periodMs ?? DEFAULT_STROBE_MS) / stepTimeMs));
       for (let f = first; f < last; f++) data[f * channelCount + def.index] = (f - first) % period < period / 2 ? LIGHT_BYTES.on : 0;
     } else {
-      const byte = isClosureKind(e.kind) ? CLOSURE_BYTES[e.kind] : LIGHT_BYTES[e.kind];
+      const byte = isClosureKind(e.kind) ? CLOSURE_BYTES[e.kind as Exclude<ClosureEffectKind, 'move'>] : LIGHT_BYTES[e.kind as LightCommand];
       for (let f = first; f < last; f++) data[f * channelCount + def.index] = byte;
     }
   }
-  return { channelCount, frameCount, stepTimeMs, minorVersion: 0, uniqueId: 0n, variableHeaders: [], data };
+  const file: FseqFile = { channelCount, frameCount, stepTimeMs, minorVersion: 0, uniqueId: 0n, variableHeaders: [], data };
+  // Moves last, in time order per closure: each needs to know where the
+  // closure is when it starts, which depends on everything before it.
+  moves.sort((a, b) => a.startMs - b.startMs);
+  for (const e of moves) compileMove(file, e);
+  return file;
+}
+
+/**
+ * A move to a position: open (or close) for as long as the travel takes at
+ * Tesla's approximate speed, then stop. A move to fully open or closed needs
+ * no stop. If the effect is shorter than the travel, it stops at its end.
+ * Only the open/close counts toward the closure's command limit.
+ */
+function compileMove(file: FseqFile, e: Effect): void {
+  const def = CHANNELS_BY_ID.get(e.channel)!;
+  const info = def.closure;
+  if (!info) return;
+  const { stepTimeMs, frameCount, channelCount, data } = file;
+  const [first, last] = effectFrames(e, stepTimeMs, frameCount);
+  if (last <= first) return;
+  const target = Math.min(1, Math.max(0, (e.targetPct ?? DEFAULT_MOVE_PCT) / 100));
+  const from = closurePositionAt(file, e.channel, first);
+  const delta = target - from;
+  if (Math.abs(delta) < 0.005) return;
+  const seconds = delta > 0 ? info.openSeconds : info.closeSeconds;
+  const travel = Math.max(1, Math.round((Math.abs(delta) * seconds * 1000) / stepTimeMs));
+  const end = Math.min(last, first + travel);
+  const byte = delta > 0 ? CLOSURE_BYTES.open : CLOSURE_BYTES.close;
+  for (let f = first; f < end; f++) data[f * channelCount + def.index] = byte;
+  const toEnd = target <= 0 || target >= 1;
+  if (!toEnd || end < first + travel) for (let f = end; f < Math.min(frameCount, end + 1); f++) data[f * channelCount + def.index] = CLOSURE_BYTES.stop;
 }
 
 /**
@@ -169,7 +210,13 @@ export const EFFECT_LABELS: Record<EffectKind, string> = {
   dance: 'Dance',
   close: 'Close',
   stop: 'Stop',
+  move: 'Move to',
 };
+
+/** What an effect is called on the timeline: "Move to 40%" includes its target. */
+export function effectLabel(e: Pick<Effect, 'kind' | 'targetPct'>): string {
+  return e.kind === 'move' ? `Move to ${Math.round(e.targetPct ?? DEFAULT_MOVE_PCT)}%` : EFFECT_LABELS[e.kind];
+}
 
 /** xLights hotkeys from Tesla's project (xlights_keybindings.xml), kept so xLights users feel at home. */
 export const EFFECT_HOTKEYS: Partial<Record<string, EffectKind>> = {

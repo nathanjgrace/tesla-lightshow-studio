@@ -133,6 +133,10 @@ Taken from model `StartChannel`s in `xlights_rgbeffects.xml`. **Bold** = present
 - **Thermal limits:** ≈30 s or less of dancing per closure per show is recommended.
 - **Model X:** moving windows while the doors move can trigger **false pinch detection and stop the show**. This should be a hard warning in our validator.
 - Commands packed too closely (~20 ms apart) waste budget and barely move anything.
+- **Partial positions** [inferred]:
+  - There is no "go to X%" command, but Stop halts a closure mid-travel and doesn't count toward the limits.
+  - The editor's **Move to %** effect compiles to Open (or Close) for `|target − current| × travel time`, then one frame of Stop. Moves to fully open or closed need no Stop.
+  - Positions are only as accurate as Tesla's approximate travel times above, and real cars vary (load, temperature, battery), so expect roughly ±10%.
 - Music plays only through cabin speakers, so the generator should avoid closing windows.
 
 None of these are checked by Tesla's `validator.py`; it checks only the header. **A closure-aware validator is a real differentiator.**
