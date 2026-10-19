@@ -1,12 +1,20 @@
 // Finding a song by name with Apple's iTunes Search API (free, no key):
-// https://performance-partners.apple.com/search-api. Results come with a
-// 30-second preview that may only be played for choosing a song, next to a
-// link to Apple Music. Previews never become a show's soundtrack or go into
-// an export: the user always brings their own copy of the song.
+// https://performance-partners.apple.com/search-api, and Deezer's public
+// search API (https://developers.deezer.com/api/search) when Apple can't be
+// reached. Results come with a 30-second preview that may only be played for
+// choosing a song, next to a link to the catalog it came from. Previews never
+// become a show's soundtrack or go into an export: the user always brings
+// their own copy of the song.
 
 import { formatTime } from './validate';
 
 export const ITUNES_SEARCH_URL = 'https://itunes.apple.com/search';
+export const DEEZER_SEARCH_URL = 'https://api.deezer.com/search';
+
+/** Where a result came from, for its "Listen on …" link. */
+export type SongSource = 'apple' | 'deezer';
+
+export const SOURCE_NAMES: Record<SongSource, string> = { apple: 'Apple Music', deezer: 'Deezer' };
 
 /** What we keep about the song behind the current show. */
 export interface SongInfo {
@@ -14,7 +22,10 @@ export interface SongInfo {
   artist: string;
   album?: string;
   artworkUrl?: string;
+  /** The song's page in the catalog it came from. */
   trackViewUrl?: string;
+  /** Which catalog; Apple when absent (older projects). */
+  source?: SongSource;
   durationMs?: number;
 }
 
@@ -42,6 +53,47 @@ export function searchUrl(term: string, { limit = 8, country, callback }: Search
   return `${ITUNES_SEARCH_URL}?${params}`;
 }
 
+/** Deezer search; JSONP (`output=jsonp`) because Deezer doesn't send CORS headers. */
+export function deezerSearchUrl(term: string, { limit = 8, callback }: Omit<SearchOptions, 'country'> = {}): string {
+  const params = new URLSearchParams({ q: term.trim(), limit: String(limit) });
+  if (callback) params.set('output', 'jsonp');
+  if (callback) params.set('callback', callback);
+  return `${DEEZER_SEARCH_URL}?${params}`;
+}
+
+/** Turns a Deezer search response into songs, dropping anything unusable. */
+export function parseDeezerResults(json: unknown): SongResult[] {
+  const results = isRecord(json) && Array.isArray(json.data) ? json.data : [];
+  const seen = new Set<string>();
+  const songs: SongResult[] = [];
+  for (const r of results) {
+    if (!isRecord(r)) continue;
+    if (r.type !== undefined && r.type !== 'track') continue;
+    if (r.readable === false) continue;
+    const title = text(r.title);
+    const artist = isRecord(r.artist) ? text(r.artist.name) : undefined;
+    const previewUrl = httpUrl(r.preview);
+    if (!title || !artist || !previewUrl) continue;
+    const id = `deezer:${typeof r.id === 'number' || typeof r.id === 'string' ? String(r.id) : previewUrl}`;
+    if (seen.has(id)) continue;
+    seen.add(id);
+    const album = isRecord(r.album) ? r.album : {};
+    const seconds = r.duration;
+    songs.push({
+      id,
+      title,
+      artist,
+      previewUrl,
+      source: 'deezer',
+      ...optional('album', text(album.title)),
+      ...optional('artworkUrl', httpUrl(album.cover_medium) ?? httpUrl(album.cover_big) ?? httpUrl(album.cover_small)),
+      ...optional('trackViewUrl', httpUrl(r.link)),
+      ...optional('durationMs', typeof seconds === 'number' && seconds > 0 && Number.isFinite(seconds) ? seconds * 1000 : undefined),
+    });
+  }
+  return songs;
+}
+
 /** Turns an iTunes Search response into songs, dropping anything unusable. */
 export function parseItunesResults(json: unknown): SongResult[] {
   const results = isRecord(json) && Array.isArray(json.results) ? json.results : [];
@@ -64,6 +116,7 @@ export function parseItunesResults(json: unknown): SongResult[] {
       title,
       artist,
       previewUrl,
+      source: 'apple',
       ...optional('album', text(r.collectionName)),
       ...optional('artworkUrl', httpUrl(r.artworkUrl100) ?? httpUrl(r.artworkUrl60)),
       ...optional('trackViewUrl', httpUrl(r.trackViewUrl)),
@@ -75,19 +128,24 @@ export function parseItunesResults(json: unknown): SongResult[] {
   return songs;
 }
 
-/** Apple's artwork URLs end in e.g. 100x100bb.jpg; any square size can be requested. */
+/**
+ * Artwork at a square size. Apple's URLs end in e.g. 100x100bb.jpg and
+ * Deezer's in 250x250-000000-80-0-0.jpg; both serve any size.
+ */
 export function artworkAt(url: string, px: number): string {
+  if (/dzcdn\.net\//.test(url)) return url.replace(/\/\d+x\d+(-[\d-]+\.(?:jpg|png))(?=$|\?)/i, `/${px}x${px}$1`);
   return url.replace(/\/\d+x\d+(bb|cc|sr)?\.(jpg|jpeg|png|webp)(?=$|\?)/i, `/${px}x${px}bb.$2`);
 }
 
 export function songInfo(r: SongResult): SongInfo {
-  const { title, artist, album, artworkUrl, trackViewUrl, durationMs } = r;
+  const { title, artist, album, artworkUrl, trackViewUrl, source, durationMs } = r;
   return {
     title,
     artist,
     ...optional('album', album),
     ...optional('artworkUrl', artworkUrl),
     ...optional('trackViewUrl', trackViewUrl),
+    ...optional('source', source),
     ...optional('durationMs', durationMs),
   };
 }

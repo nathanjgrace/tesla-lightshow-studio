@@ -1,13 +1,15 @@
-import { ArrowLeft, ArrowUpRight, FolderOpen, Info, LoaderCircle, Music, Pause, Play, Search, Sparkles, TriangleAlert, Upload, X } from 'lucide-react';
+import { ArrowLeft, ArrowUpRight, FolderOpen, Info, LoaderCircle, Music, Pause, Play, RotateCw, Search, Sparkles, TriangleAlert, Upload, X } from 'lucide-react';
 import { useEffect, useRef, useState, type CSSProperties } from 'react';
-import { artworkAt, formatLength, songInfo, type SongInfo, type SongResult } from '../core/songSearch';
+import { artworkAt, formatLength, songInfo, SOURCE_NAMES, type SongInfo, type SongResult, type SongSource } from '../core/songSearch';
 import { AUDIO_ACCEPT, isAudioFile } from '../library/load';
 import { Dialog } from './dialogs';
-import { searchSongs } from './itunes';
+import { resetSongSearch, searchSongs, SongSearchError, type SourceFailure } from './musicSearch';
 
 export const MOD_KEY = typeof navigator !== 'undefined' && /Mac|iPhone|iPad/.test(navigator.platform) ? '⌘' : 'Ctrl';
 const FORMATS = 'MP3, WAV, M4A, FLAC, OGG or Opus';
-const DEBOUNCE_MS = 250;
+// Long enough not to search on every keystroke: Apple allows about 20 searches a minute.
+const DEBOUNCE_MS = 350;
+const SOURCE_HOSTS: Record<SongSource, string> = { apple: 'itunes.apple.com', deezer: 'api.deezer.com' };
 
 type Status = 'idle' | 'loading' | 'done' | 'error';
 
@@ -36,8 +38,9 @@ function Artwork({ url, px, className = '' }: { url: string | undefined; px: num
   );
 }
 
-function AppleLink({ url, compact }: { url: string | undefined; compact?: boolean }) {
+function ListenLink({ url, source = 'apple', compact }: { url: string | undefined; source?: SongSource; compact?: boolean }) {
   if (!url) return null;
+  const name = SOURCE_NAMES[source];
   return (
     <a
       className="song-apple"
@@ -46,15 +49,15 @@ function AppleLink({ url, compact }: { url: string | undefined; compact?: boolea
       rel="noopener noreferrer"
       tabIndex={compact ? -1 : undefined}
       onClick={(e) => e.stopPropagation()}
-      title="Open this song in Apple Music"
+      title={`Open this song in ${name}`}
     >
-      Listen on Apple Music <ArrowUpRight size={12} />
+      Listen on {name} <ArrowUpRight size={12} />
     </a>
   );
 }
 
 /**
- * Search Apple's catalog by name, preview the 30-second clip, then bring your
+ * Search Apple's catalog (or Deezer's) by name, preview the 30-second clip, then bring your
  * own copy. Previews are never used as the show's audio.
  */
 export function SongSearchDialog({
@@ -70,6 +73,8 @@ export function SongSearchDialog({
   const [term, setTerm] = useState(initialTerm);
   const [results, setResults] = useState<SongResult[]>([]);
   const [status, setStatus] = useState<Status>('idle');
+  const [failures, setFailures] = useState<SourceFailure[]>([]);
+  const [attempt, setAttempt] = useState(0);
   const [active, setActive] = useState(-1);
   const [selected, setSelected] = useState<SongResult>();
   const [playing, setPlaying] = useState<string>();
@@ -98,7 +103,7 @@ export function SongSearchDialog({
     const controller = new AbortController();
     const timer = setTimeout(() => {
       searchSongs(q, { signal: controller.signal })
-        .then((songs) => {
+        .then((songs: SongResult[]) => {
           if (id !== request.current) return;
           setResults(songs);
           setActive(songs.length ? 0 : -1);
@@ -106,6 +111,7 @@ export function SongSearchDialog({
         })
         .catch((e: unknown) => {
           if (id !== request.current || (e instanceof DOMException && e.name === 'AbortError')) return;
+          setFailures(e instanceof SongSearchError ? e.failures : []);
           setStatus('error');
         });
     }, DEBOUNCE_MS);
@@ -113,7 +119,7 @@ export function SongSearchDialog({
       clearTimeout(timer);
       controller.abort();
     };
-  }, [term]);
+  }, [term, attempt]);
 
   // One shared player; it stops when the dialog closes.
   useEffect(() => {
@@ -281,7 +287,7 @@ export function SongSearchDialog({
                 </p>
                 <div className="song-card-actions">
                   {previewButton(selected, true)}
-                  <AppleLink url={selected.trackViewUrl} />
+                  <ListenLink url={selected.trackViewUrl} source={selected.source} />
                 </div>
               </div>
             </div>
@@ -353,7 +359,7 @@ export function SongSearchDialog({
                         <span className="song-row-artist truncate">{song.artist}</span>
                         <span className="song-row-meta">
                           <span className="truncate">{[song.album, song.year].filter(Boolean).join(' · ')}</span>
-                          <AppleLink url={song.trackViewUrl} compact />
+                          <ListenLink url={song.trackViewUrl} source={song.source} compact />
                         </span>
                       </span>
                       <span className="song-row-len">{song.durationMs ? formatLength(song.durationMs) : ''}</span>
@@ -366,8 +372,31 @@ export function SongSearchDialog({
                   {status === 'error' ? (
                     <>
                       <TriangleAlert size={22} className="song-empty-icon warn" />
-                      <p className="song-empty-title">Couldn't reach Apple Music</p>
-                      <p className="muted">Check your connection and try again, or drop your song file here to start without searching.</p>
+                      <p className="song-empty-title">Couldn't reach the music catalogs</p>
+                      {failures.length > 0 && (
+                        <ul className="song-failures">
+                          {failures.map((f) => (
+                            <li key={f.source}>
+                              <strong>{SOURCE_NAMES[f.source]}</strong> ({SOURCE_HOSTS[f.source]}): {f.detail}
+                            </li>
+                          ))}
+                        </ul>
+                      )}
+                      <p className="muted">
+                        {failures.some((f) => f.reason === 'blocked')
+                          ? 'An ad or content blocker, a privacy extension or a network filter (work, school, Pi-hole) is likely blocking these sites. Allow them for this page, or '
+                          : 'Check your connection, or '}
+                        drop your song file here to start without searching.
+                      </p>
+                      <button
+                        className="song-retry"
+                        onClick={() => {
+                          resetSongSearch();
+                          setAttempt((a) => a + 1);
+                        }}
+                      >
+                        <RotateCw size={14} /> Try again
+                      </button>
                     </>
                   ) : status === 'done' ? (
                     <>
@@ -378,7 +407,7 @@ export function SongSearchDialog({
                   ) : status === 'loading' ? (
                     <>
                       <LoaderCircle size={22} className="song-empty-icon song-spin" />
-                      <p className="muted">Searching Apple Music…</p>
+                      <p className="muted">Searching…</p>
                     </>
                   ) : (
                     <>
@@ -404,7 +433,8 @@ export function SongSearchDialog({
         <p className="song-fineprint">
           <Info size={13} />
           <span>
-            Search and previews by Apple Music. Previews are only for picking a song; they're never used in your show or its export.
+            Search and previews by Apple Music, or Deezer when Apple can't be reached. Previews are only for picking a song; they're never used in
+            your show or its export.
           </span>
         </p>
         <audio

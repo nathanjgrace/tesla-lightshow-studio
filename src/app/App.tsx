@@ -33,7 +33,7 @@ import {
   type EffectKind,
 } from '../core/project';
 import { simulate } from '../core/simulate';
-import { bestMatch, durationWarning, guessFromFileName, songInfo, type SongInfo } from '../core/songSearch';
+import { bestMatch, durationWarning, guessFromFileName, songInfo, SOURCE_NAMES, type SongInfo } from '../core/songSearch';
 import { formatTime, validate } from '../core/validate';
 import { DEFAULT_VEHICLE_ID, VEHICLES_BY_ID, vehiclesByModel, type VehicleProfile } from '../core/vehicles';
 import { DEFAULT_SHOW_ID, LIBRARY, type LibraryShow } from '../library/catalog';
@@ -44,7 +44,7 @@ import { Composer, type Range } from './Composer';
 import { ComposerBar } from './ComposerBar';
 import { ExportDialog, UsbHelpDialog, VinDialog } from './dialogs';
 import { exportFseq, exportUsbZip } from './exportShow';
-import { searchSongs } from './itunes';
+import { searchSongs } from './musicSearch';
 import { Menu } from './Menu';
 import { Playback } from './playback';
 import { MOD_KEY, SongBadge, SongSearchDialog, StartState, Toast } from './SongSearch';
@@ -240,7 +240,7 @@ export function App() {
     const fileTitle = fileName.replace(/\.[^.]+$/, '');
     setDoc((d) => d && { ...d, title: song.title, song });
     setToast({
-      message: `Matched “${song.title}” by ${song.artist} on Apple Music.`,
+      message: `Matched “${song.title}” by ${song.artist} on ${SOURCE_NAMES[song.source ?? 'apple']}.`,
       action: {
         label: 'Not this song',
         onSelect: () => token === loadToken.current && setDoc((d) => d && { ...d, title: fileTitle, song: undefined }),

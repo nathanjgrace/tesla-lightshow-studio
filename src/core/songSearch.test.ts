@@ -7,11 +7,13 @@ import {
   formatLength,
   guessFromFileName,
   matchesFileName,
+  deezerSearchUrl,
+  parseDeezerResults,
   parseItunesResults,
   searchUrl,
   songInfo,
 } from './songSearch';
-import { ITUNES_SAMPLE } from './songSearch.sample';
+import { DEEZER_SAMPLE, ITUNES_SAMPLE } from './songSearch.sample';
 
 describe('searchUrl', () => {
   it('asks for songs only', () => {
@@ -55,6 +57,7 @@ describe('parseItunesResults', () => {
       year: 2000,
       genre: 'Electronic',
       durationMs: 320357,
+      source: 'apple',
       previewUrl: expect.stringMatching(/^https:\/\/audio-ssl\.itunes\.apple\.com\/.+\.m4a$/),
       artworkUrl: expect.stringMatching(/100x100bb\.jpg$/),
       trackViewUrl: 'https://music.apple.com/us/album/one-more-time/697194953?i=697195462&uo=4',
@@ -81,7 +84,39 @@ describe('parseItunesResults', () => {
       ],
     });
     expect(parsed.map((s) => s.id)).toEqual(['1', '5']);
-    expect(parsed[1]).toEqual({ id: '5', title: 'T', artist: 'A', previewUrl: 'https://x/p.m4a' });
+    expect(parsed[1]).toEqual({ id: '5', title: 'T', artist: 'A', previewUrl: 'https://x/p.m4a', source: 'apple' });
+  });
+});
+
+describe('Deezer', () => {
+  it('builds a JSONP search URL', () => {
+    const url = new URL(deezerSearchUrl('  one more time ', { limit: 5, callback: 'cb' }));
+    expect(url.origin + url.pathname).toBe('https://api.deezer.com/search');
+    expect(Object.fromEntries(url.searchParams)).toEqual({ q: 'one more time', limit: '5', output: 'jsonp', callback: 'cb' });
+    expect(new URL(deezerSearchUrl('x')).searchParams.has('output')).toBe(false);
+  });
+
+  it('maps tracks, keeping only playable ones with safe links', () => {
+    const songs = parseDeezerResults(DEEZER_SAMPLE);
+    expect(songs.map((s) => s.title)).toEqual(['One More Time', 'One More Time (Short Radio Edit)']);
+    expect(songs[0]).toEqual({
+      id: 'deezer:3135553',
+      title: 'One More Time',
+      artist: 'Daft Punk',
+      album: 'Discovery',
+      source: 'deezer',
+      durationMs: 320000,
+      previewUrl: expect.stringMatching(/^https:\/\/cdnt-preview\.dzcdn\.net\/.+\.mp3\?/),
+      artworkUrl: expect.stringMatching(/250x250-000000-80-0-0\.jpg$/),
+      trackViewUrl: 'https://www.deezer.com/track/3135553',
+    });
+    expect(songs[1]!.artworkUrl).toBeUndefined();
+  });
+
+  it('survives junk', () => {
+    expect(parseDeezerResults(undefined)).toEqual([]);
+    expect(parseDeezerResults({ data: [null, {}, { type: 'album', title: 'x' }] })).toEqual([]);
+    expect(parseDeezerResults({ error: { type: 'Exception', message: 'Quota limit exceeded', code: 4 } })).toEqual([]);
   });
 });
 
@@ -92,6 +127,11 @@ describe('artworkAt', () => {
     expect(artworkAt(url.replace('100x100bb', '60x60bb'), 600)).toMatch(/\/600x600bb\.jpg$/);
   });
 
+  it('swaps the size in Deezer artwork URLs', () => {
+    const url = 'https://cdn-images.dzcdn.net/images/cover/5718f7c81c27e0b2417e2a4c45224f8a/250x250-000000-80-0-0.jpg';
+    expect(artworkAt(url, 100)).toBe('https://cdn-images.dzcdn.net/images/cover/5718f7c81c27e0b2417e2a4c45224f8a/100x100-000000-80-0-0.jpg');
+  });
+
   it('leaves other URLs alone', () => {
     expect(artworkAt('https://example.com/cover.jpg', 200)).toBe('https://example.com/cover.jpg');
   });
@@ -100,7 +140,7 @@ describe('artworkAt', () => {
 describe('songInfo', () => {
   it('keeps only the metadata a show stores', () => {
     const info = songInfo(parseItunesResults(ITUNES_SAMPLE)[0]!);
-    expect(Object.keys(info).sort()).toEqual(['album', 'artist', 'artworkUrl', 'durationMs', 'title', 'trackViewUrl']);
+    expect(Object.keys(info).sort()).toEqual(['album', 'artist', 'artworkUrl', 'durationMs', 'source', 'title', 'trackViewUrl']);
   });
 });
 

@@ -142,3 +142,47 @@ export const ITUNES_SAMPLE = {
     'not an object',
   ],
 };
+
+// A Deezer search response for tests, in the shape api.deezer.com returned
+// from GitHub's runners (artist and album trimmed to the fields we read;
+// preview tokens shortened). The last two entries are deliberately unusable.
+export const DEEZER_SAMPLE = {
+  data: [
+    {
+      id: 3135553,
+      readable: true,
+      title: 'One More Time',
+      title_short: 'One More Time',
+      title_version: '',
+      link: 'https://www.deezer.com/track/3135553',
+      duration: 320,
+      preview: 'https://cdnt-preview.dzcdn.net/api/1/1/f/8/c/0/f8c5dc3837912dba37c9a1ab3170cc3f.mp3?hdnea=exp=1792374786~hmac=e7c5',
+      artist: { id: 27, name: 'Daft Punk', type: 'artist' },
+      album: {
+        id: 302127,
+        title: 'Discovery',
+        cover_small: 'https://cdn-images.dzcdn.net/images/cover/5718f7c81c27e0b2417e2a4c45224f8a/56x56-000000-80-0-0.jpg',
+        cover_medium: 'https://cdn-images.dzcdn.net/images/cover/5718f7c81c27e0b2417e2a4c45224f8a/250x250-000000-80-0-0.jpg',
+        cover_big: 'https://cdn-images.dzcdn.net/images/cover/5718f7c81c27e0b2417e2a4c45224f8a/500x500-000000-80-0-0.jpg',
+        type: 'album',
+      },
+      type: 'track',
+    },
+    {
+      id: 3157685,
+      readable: true,
+      title: 'One More Time (Short Radio Edit)',
+      link: 'https://www.deezer.com/track/3157685',
+      duration: 235,
+      preview: 'https://cdnt-preview.dzcdn.net/api/1/1/1/b/c/0/1bc55617dc98cab4519c938ec781ba7f.mp3?hdnea=exp=1792374786~hmac=d88b',
+      artist: { id: 27, name: 'Daft Punk', type: 'artist' },
+      album: { id: 303598, title: 'One More Time', type: 'album' },
+      type: 'track',
+    },
+    // Not playable in Deezer's catalog.
+    { id: 1, readable: false, title: 'Gone', preview: 'https://cdnt-preview.dzcdn.net/x.mp3', artist: { name: 'Nobody' }, type: 'track' },
+    // A link that isn't http(s).
+    { id: 2, title: 'Bad', preview: 'javascript:alert(1)', artist: { name: 'Nobody' }, type: 'track' },
+  ],
+  total: 4,
+};
