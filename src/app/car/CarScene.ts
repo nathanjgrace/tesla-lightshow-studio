@@ -183,6 +183,7 @@ export class CarScene {
     this.renderer = new THREE.WebGLRenderer({ antialias: true });
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
+    this.renderer.toneMappingExposure = 1.2;
     container.appendChild(this.renderer.domElement);
 
     this.scene.background = new THREE.Color('#07090c');
@@ -211,8 +212,8 @@ export class CarScene {
     // Night: a soft sky fill and a high moon, enough to read the car's shape
     // without competing with its lights. No low rim light: from the default
     // views its highlight on glossy glass looked like a lamp.
-    this.scene.add(new THREE.HemisphereLight('#8f9cb6', '#1c1c1c', 1.2));
-    const moon = new THREE.DirectionalLight('#c4d0ff', 1.15);
+    this.scene.add(new THREE.HemisphereLight('#9aa6bd', '#262626', 1.9));
+    const moon = new THREE.DirectionalLight('#c9d4ff', 1.6);
     moon.position.set(-4, 8, 5);
     this.scene.add(moon);
 

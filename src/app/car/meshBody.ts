@@ -151,15 +151,39 @@ export function buildTeslaBody(b: Builder, asset: TeslaAsset, style: BodyStyle, 
     b.lightBar(mesh, bar.pixels, bar.from, bar.to, lampColor(bar.pixels[0]!, bar.tris[0]!.role));
   }
   // Lamps Tesla's mesh doesn't model (Model S side repeaters, license plate
-  // and rear fogs): a small lens at the layout's position.
+  // and rear fogs): a small lens on the body near the layout's position,
+  // moving with the panel it sits on (the plate lights ride on the liftgate).
+  // Tesla's layout puts the rear fogs beside the plate, where nothing is on
+  // the real cars; they go low in the rear bumper instead.
   const lit = new Set(tris.flatMap((t) => t.lights ?? []));
+  const solid = tris.filter((t) => t.role !== 'glass' && t.role !== 'lens' && t.role !== 'redLens');
+  const surfaceNear = (p: THREE.Vector3, facing?: (n: THREE.Vector3) => boolean) => {
+    let best: Tri | undefined;
+    let d = Infinity;
+    for (const t of solid) {
+      if (facing && !facing(t.normal)) continue;
+      const e = t.centroid.distanceToSquared(p);
+      if (e < d) [d, best] = [e, t];
+    }
+    return best;
+  };
   for (const n of lampNodes) {
     const id = channelOf(n)!.id;
     if (lit.has(id) || /Bar\d/.test(id)) continue;
-    const color = lampColor([id], /Tail|brake|rearFog/i.test(id) ? 'redLens' : 'lens');
-    const lens = id === 'licensePlate' ? new THREE.Color('#9a9a9a') : COLORS.lensFront;
-    const size: [number, number, number] = id === 'licensePlate' ? [1.5, 3, 12] : [6, 2.5, 2.5];
-    b.light(rig, [id], color, lens, size, n.position, id === 'licensePlate' ? 0.6 : 4);
+    const red = /Tail|brake|rearFog/i.test(id);
+    const color = lampColor([id], red ? 'redLens' : 'lens');
+    const lens = id === 'licensePlate' ? new THREE.Color('#9a9a9a') : red ? new THREE.Color('#2a0c0d') : COLORS.lensFront;
+    const size: [number, number, number] = id === 'licensePlate' ? [1.5, 3, 12] : id === 'rearFog' ? [2, 3, 14] : [6, 2.5, 2.5];
+    let at = new THREE.Vector3(...n.position);
+    if (id === 'rearFog' && !isCybertruck) {
+      const target = new THREE.Vector3(at.x, 0.36 / k, Math.sign(at.z || 1) * 0.42 / k);
+      const t = surfaceNear(target, (nrm) => nrm.x < -0.5);
+      if (t) at = t.centroid.clone().add(t.normal.clone().multiplyScalar(0.4));
+    }
+    const host = surfaceNear(at);
+    const parent = host?.part ? partGroup(host.part).group : rig;
+    const local = host?.part ? at.clone().sub(rigs.get(host.part)!.pivot) : at;
+    b.light(parent, [id], color, lens, size, local.toArray() as Vec3, id === 'licensePlate' ? 0.6 : 4);
   }
   for (const [part, { group, extent }] of partGroups) {
     const spec = rigs.get(part)!;
@@ -172,7 +196,8 @@ export function buildTeslaBody(b: Builder, asset: TeslaAsset, style: BodyStyle, 
   const prefix = isCybertruck ? 'CT ' : '';
   const beam = m(at(`${prefix}Right Outer Main Beam`));
   const fog = m(at('Right Front Fog'));
-  if (beam) headBeams(b, { x: beam[0], y: beam[1], z: beam[2] }, fog && { x: fog[0], y: fog[1], z: fog[2] });
+  // The beams start a little ahead of the lamps, so they light the ground, not the lamp housings.
+  if (beam) headBeams(b, { x: beam[0] + 0.15, y: beam[1], z: beam[2] }, fog && { x: fog[0] + 0.15, y: fog[1], z: fog[2] });
   const halfLength = Math.max(-bounds.min.x, bounds.max.x) * k;
   const glow = new THREE.PointLight('#ff2020', 0, 6, 1.6);
   glow.position.set(bounds.min.x * k - 0.35, 0.7, 0);
@@ -312,8 +337,10 @@ function meshMaterials(b: Builder, asset: TeslaAsset): Materials {
     black: new THREE.MeshStandardMaterial({ color: '#060607', roughness: 0.6 }),
     glass: b.m.glass,
     sideGlass: b.m.sideGlass,
-    lens: new THREE.MeshStandardMaterial({ map: tex('Lights_AO.png'), roughness: 0.15, metalness: 0.2 }),
-    redLens: new THREE.MeshStandardMaterial({ map: tex(ct ? 'Lights_AO_Red.png' : 'Lights_Red_AO.png'), roughness: 0.15, metalness: 0.1 }),
+    // Lamp housings: not mirror-glossy, or every lot light, the moon and the
+    // car's own beams show up as pinpoint glints of color inside the lamps.
+    lens: new THREE.MeshStandardMaterial({ map: tex('Lights_AO.png'), roughness: 0.45, metalness: 0, envMapIntensity: 0.4 }),
+    redLens: new THREE.MeshStandardMaterial({ map: tex(ct ? 'Lights_AO_Red.png' : 'Lights_Red_AO.png'), roughness: 0.45, metalness: 0, envMapIntensity: 0.4 }),
     wheel: new THREE.MeshStandardMaterial({
       map: tex(ct ? 'Cybertruck_Premium_Wheel_AO_Dark.png' : 'Arachnid_Wheel_AO.png'),
       roughness: 0.35,

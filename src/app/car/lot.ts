@@ -4,10 +4,11 @@
 // puddle mask, so the car's lights smear across the wet ground the way they
 // do in real life.
 //
-// Layout (meters, x = forward, z = right): the car is nosed into a stall
-// facing +x, with a planted island just ahead of it. The lot repeats every
-// MODULE meters along x: island, a row of stalls facing it, a driving aisle,
-// and a row facing the next island. Our row ends at the island at x = HEAD_X.
+// Layout (meters, x = forward, z = right): the car is backed into a stall,
+// facing +x toward the driving aisle, with a planted island just behind it.
+// The lot repeats every MODULE meters along x: island, a row of stalls, a
+// driving aisle, and a row backing onto the next island. Our row starts at
+// the island edge x = -HEAD_X.
 
 import * as THREE from 'three';
 import { Reflector } from 'three/examples/jsm/objects/Reflector.js';
@@ -56,7 +57,7 @@ const NOISE_GLSL = /* glsl */ `
   }
   /** Stall lines: 1 on a line. They run along x, between stalls, in both rows of each module. */
   vec3 st_paint(vec2 p) {
-    float u = mod(p.x - ${f(HEAD_X)}, ${f(MODULE)});
+    float u = mod(-p.x - ${f(HEAD_X)}, ${f(MODULE)});
     float inRow = step(${f(ISLAND)}, u) * step(u, ${f(ISLAND + STALL_LENGTH)}) + step(${f(ISLAND + STALL_LENGTH + AISLE)}, u);
     float w = (p.y - ${f(STALL_WIDTH / 2)}) / ${f(STALL_WIDTH)};
     float d = abs(w - floor(w + 0.5)) * ${f(STALL_WIDTH)};
@@ -209,7 +210,7 @@ export function buildLot(scene: THREE.Scene): Lot {
   const headGeometry = own(new THREE.BoxGeometry(0.7, 0.12, 0.7));
   const baseGeometry = own(new THREE.CylinderGeometry(0.25, 0.25, 0.5, 12));
   for (let k = -2; k <= 2; k++) {
-    const x = HEAD_X + ISLAND / 2 + k * MODULE;
+    const x = -(HEAD_X + ISLAND / 2 + k * MODULE);
     const island = new THREE.Mesh(curbGeometry, curb);
     island.position.set(x, CURB_HEIGHT / 2, 0);
     const bed = new THREE.Mesh(mulchGeometry, mulch);
@@ -225,7 +226,7 @@ export function buildLot(scene: THREE.Scene): Lot {
       group.add(base, post, glow);
       // Only the nearest island's lamps cast light; farther ones just glow.
       if (k === 0 || k === -1) {
-        const light = new THREE.PointLight(LAMP_COLOR, 60, 24, 1.5);
+        const light = new THREE.PointLight(LAMP_COLOR, 110, 30, 1.5);
         light.position.copy(glow.position).add(new THREE.Vector3(0, -0.3, 0));
         group.add(light);
       }
