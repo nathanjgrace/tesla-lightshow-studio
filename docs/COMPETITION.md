@@ -1,6 +1,6 @@
 # Competitive landscape
 
-_Last reviewed 2026-10-18. Goal: be the obvious best tool for Tesla light shows the moment someone opens it._
+_Last reviewed 2026-10-19. Goal: be the obvious best tool for Tesla light shows the moment someone opens it._
 
 ## Who else is out there
 
@@ -22,7 +22,7 @@ Sources: [That Lightshow](https://thatteslalightshow.com/), [Light Show Creator]
 3. **Closure safety.** The validator catches command limits, dance-before-open, thermal limits and Model X pinch risk. Nobody else advertises this.
 4. **Open any show and keep editing.** Imported `.fseq` files become editable effects, byte-for-byte lossless. That makes us the editor for every show in the community libraries.
 5. **Respect for xLights users.** Tesla's xLights hotkeys (F, E/D/C, W/S/X, Q/A/Z) work the same way.
-6. **The best-looking preview.** Tesla's own textured 3D models, wired light by light from Tesla's xLights layout: the Model S and Cybertruck as Tesla made them (including every Cybertruck light bar LED), and the Model X, 3 and Y reshaped from the S. The car sits on a wet street that reflects the show, in the paint it was sold in. Competitors use generic or stylized models.
+6. **The best-looking preview.** Tesla's own textured 3D models, wired light by light from Tesla's xLights layout: the Model S and Cybertruck as Tesla made them (including every Cybertruck light bar LED), and the Model X, 3 and Y reshaped from the S. The car sits in a wet parking lot that reflects the show, in the paint it was sold in. Competitors use generic or stylized models.
 
 ## Must match (or beat)
 
@@ -32,7 +32,7 @@ Sources: [That Lightshow](https://thatteslalightshow.com/), [Light Show Creator]
 | Mirror left↔right | ✅ (M) |
 | Waveform timeline, live preview | ✅ |
 | Validated exports | ✅ (plus closure checks nobody else has) |
-| **One-click auto-generate from beats/drops** | ✅ beats, hits and sections drive lights and a closure planner; three styles, intensity, variations; checked against Tesla's own choreography |
+| **One-click auto-generate from beats/drops** | ✅ beats, hits, **melody** and sections drive lights and a closure planner; one light family per sound (shown in the panel), dark between hits, notes held for their length, repeated choruses look the same; three styles, intensity, variations; measured against Tesla's own choreography |
 | Show library / sharing | Tesla examples ✅; community sharing later (M7) |
 | Flash-rate safety limit | To add to the validator |
 | Beat grid snapping | ✅ beat and bar lines, section labels, snapping to beat subdivisions |
@@ -48,3 +48,16 @@ Sources: [That Lightshow](https://thatteslalightshow.com/), [Light Show Creator]
 ## Notes
 
 - **Name:** "Lightshow Studio" is close to Marquee's "Tesla Light Show Studio", and product names using "Tesla" invite trademark trouble. Worth choosing a distinctive name before a public launch.
+
+## That Lightshow's builder, up close (2026-10-19)
+
+Captured by a real browser on a GitHub Actions runner (the site isn't reachable from our sandbox):
+- **Song lookup:** the page calls its own server, `GET /api/song-search?q=…`, which returns Apple iTunes Search results reshaped as `{id, title, artist, album, artwork (200 px), previewUrl (Apple's 30 s AAC), fullSeconds, explicit, storeUrl}`. Results come back in Apple's order (for "Blinding Lights" a remix and covers came before The Weeknd's original, which was 6th); our `bestMatch` ranking does better here. A server proxy means the user's browser never talks to Apple, so ad blockers and school/work networks that block `itunes.apple.com` don't matter, at the cost of running a server.
+- **Flow:** "Hear 30 seconds and watch your car light up to it. No file needed." Then "drop in your own copy of the song" to export the full show. That's the same split as ours: preview clip first, own copy to export.
+- **Editor:** a beat-cell grid (click a cell to cycle Open/Close/Dance/Stop on closures), BPM and intensity sliders, 46 channels, a Model 3 `.glb` with Draco compression. Closures are auto-choreographed by default.
+- **Export:** a ZIP download plus an emailed link; "Your song is deleted from our servers after you export" (they upload the song).
+
+What it means for us:
+- We stay serverless; nothing is uploaded. If browser-side lookups keep failing for some users, a tiny optional proxy (for example a free Cloudflare Worker in front of iTunes Search) is the fallback after Deezer.
+- Their editor is a coarse beat grid; ours is a full timeline with xLights-style effects, so the lead is in editing depth and preview fidelity. Keep auto-generate visibly musical (melody, per-sound lights) since that's their headline.
+

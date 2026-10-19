@@ -1069,6 +1069,43 @@ button.generate-trigger.open {
   font-size: 10.5px;
 }
 
+.generate-map {
+  margin-top: 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface-2);
+}
+
+.generate-map summary {
+  padding: 7px 10px;
+  color: var(--fg-2);
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.generate-map dl {
+  margin: 0;
+  padding: 0 10px 8px;
+}
+
+.generate-map dl > div {
+  display: grid;
+  grid-template-columns: 92px 1fr;
+  gap: 8px;
+  padding: 3px 0;
+  font-size: 11.5px;
+  line-height: 1.4;
+}
+
+.generate-map dt {
+  color: var(--muted);
+}
+
+.generate-map dd {
+  margin: 0;
+  color: var(--fg);
+}
+
 .paint-toggle.generate-closures.disabled {
   opacity: 0.5;
   cursor: default;

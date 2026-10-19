@@ -1,6 +1,7 @@
 // Music analysis for auto-generated shows: tempo and beats, bar starts,
-// drum-like hits by frequency band, a loudness curve, and sections (intro,
-// verse, build, chorus, drop, break, outro).
+// drum-like hits by frequency band, the melody's notes (melody.ts), a
+// loudness curve, and sections (intro, verse, build, chorus, drop, break,
+// outro).
 //
 // Methods are standard and small enough to read: spectral-flux onsets,
 // tempo by autocorrelation with a preference for ~120 BPM, and dynamic-
@@ -8,6 +9,9 @@
 // Programming", 2007). Bars assume 4/4, which covers almost all pop and EDM.
 
 import { fft, hann } from './fft';
+import { melody, type Note } from './melody';
+
+export type { Note };
 
 export type Band = 'low' | 'mid' | 'high';
 
@@ -37,6 +41,8 @@ export interface Analysis {
   /** Bar starts (every fourth beat), ms. */
   downbeats: number[];
   onsets: Onset[];
+  /** The lead line (voice or lead instrument), note by note. */
+  notes: Note[];
   /** Loudness, 0..1, one value per `hopMs`. */
   energy: { hopMs: number; values: number[] };
   sections: Section[];
@@ -49,7 +55,7 @@ const BANDS: Record<Band, [number, number]> = { low: [30, 150], mid: [150, 2500]
 const MIN_BPM = 60;
 const MAX_BPM = 190;
 
-/** Analyzes mono samples. Takes about a second for a four-minute song. */
+/** Analyzes mono samples. Takes a few seconds for a four-minute song. */
 export function analyze(input: Float32Array, inputRate: number): Analysis {
   const { samples, rate } = downsample(input, inputRate);
   const durationMs = (input.length / inputRate) * 1000;
@@ -75,6 +81,7 @@ export function analyze(input: Float32Array, inputRate: number): Analysis {
     beats,
     downbeats,
     onsets,
+    notes: melody(input, inputRate),
     energy: { hopMs, values: Array.from(energy) },
     sections,
   };

@@ -5,7 +5,7 @@ import { LoaderCircle, Shuffle, Sparkles, X } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import type { Analysis, SectionKind } from '../core/analysis';
 import { CHANNELS_BY_ID } from '../core/channels';
-import { DEFAULT_OPTIONS, STYLES, type GenerateOptions, type StyleId } from '../core/generate';
+import { DEFAULT_OPTIONS, musicMap, STYLES, type GenerateOptions, type StyleId } from '../core/generate';
 import { formatTime } from '../core/validate';
 import type { VehicleProfile } from '../core/vehicles';
 
@@ -154,6 +154,18 @@ export function GenerateButton({ state, profile, rangeLabel, hasEffects, onGener
             <span>Busy</span>
           </div>
 
+          <details className="generate-map">
+            <summary>What follows what</summary>
+            <dl>
+              {musicMap(profile).map((row) => (
+                <div key={row.sound}>
+                  <dt>{row.sound}</dt>
+                  <dd>{row.lights}</dd>
+                </div>
+              ))}
+            </dl>
+          </details>
+
           <label className={`paint-toggle generate-closures${hasClosures ? '' : ' disabled'}`}>
             <span>
               <span className="paint-toggle-title">Move doors and closures</span>
@@ -190,7 +202,7 @@ function SongSummary({ state }: { state: AnalysisState }) {
   if (state.status === 'pending') {
     return (
       <div className="generate-song muted">
-        <LoaderCircle size={14} className="song-spin" /> Listening to the song: beats, hits and sections…
+        <LoaderCircle size={14} className="song-spin" /> Listening to the song: beats, hits, melody and sections…
       </div>
     );
   }
@@ -206,6 +218,9 @@ function SongSummary({ state }: { state: AnalysisState }) {
         </span>
         <span>
           <strong>{a.downbeats.length}</strong> bars
+        </span>
+        <span>
+          <strong>{a.notes.length}</strong> {a.notes.length === 1 ? 'note' : 'notes'}
         </span>
         <span>
           <strong>{a.sections.length}</strong> {a.sections.length === 1 ? 'section' : 'sections'}

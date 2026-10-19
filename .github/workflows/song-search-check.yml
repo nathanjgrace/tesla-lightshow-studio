@@ -16,6 +16,7 @@ on:
       - 'src/app/GeneratePanel.tsx'
       - 'src/core/analysis.ts'
       - 'src/core/generate.ts'
+      - 'src/core/melody.ts'
       - 'src/core/songSearch.ts'
       - 'scripts/song-search-check.mjs'
       - '.github/workflows/song-search-check.yml'
