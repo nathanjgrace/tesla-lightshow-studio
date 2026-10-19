@@ -7,7 +7,8 @@ export function Dialog({ title, onClose, children, wide }: { title: string; onCl
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => e.key === 'Escape' && onClose();
     window.addEventListener('keydown', onKey);
-    ref.current?.querySelector<HTMLElement>('input, button')?.focus();
+    const first = ref.current?.querySelector<HTMLElement>('[data-autofocus]') ?? ref.current?.querySelector<HTMLElement>('input, button');
+    first?.focus();
     return () => window.removeEventListener('keydown', onKey);
   }, [onClose]);
   return (

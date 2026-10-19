@@ -33,6 +33,7 @@ import {
   type EffectKind,
 } from '../core/project';
 import { simulate } from '../core/simulate';
+import { bestMatch, durationWarning, guessFromFileName, songInfo, type SongInfo } from '../core/songSearch';
 import { formatTime, validate } from '../core/validate';
 import { DEFAULT_VEHICLE_ID, VEHICLES_BY_ID, vehiclesByModel, type VehicleProfile } from '../core/vehicles';
 import { DEFAULT_SHOW_ID, LIBRARY, type LibraryShow } from '../library/catalog';
@@ -43,13 +44,15 @@ import { Composer, type Range } from './Composer';
 import { ComposerBar } from './ComposerBar';
 import { ExportDialog, UsbHelpDialog, VinDialog } from './dialogs';
 import { exportFseq, exportUsbZip } from './exportShow';
+import { searchSongs } from './itunes';
 import { Menu } from './Menu';
 import { Playback } from './playback';
+import { MOD_KEY, SongBadge, SongSearchDialog, StartState, Toast } from './SongSearch';
 import { useEditor } from './useEditor';
 
 type Layout = 'side' | 'stack';
 type CarMode = 'single' | 'multi';
-type Modal = 'vin' | 'export' | 'help' | undefined;
+type Modal = 'vin' | 'export' | 'help' | 'song' | undefined;
 
 interface Doc {
   /** Changes whenever a different show is opened. */
@@ -58,6 +61,8 @@ interface Doc {
   audio: Blob | undefined;
   /** Where it came from, for the File menu. */
   source: { kind: 'library'; id: string } | { kind: 'file'; name: string } | { kind: 'new'; name: string };
+  /** The song behind a new show, from Apple's catalog (metadata only, never audio). */
+  song?: SongInfo;
 }
 
 function stored(key: string): string | null {
@@ -109,6 +114,7 @@ export function App() {
   const [error, setError] = useState<string>();
   const [checksOpen, setChecksOpen] = useState(false);
   const [modal, setModal] = useState<Modal>();
+  const [toast, setToast] = useState<{ message: string; tone?: 'info' | 'warn'; action?: { label: string; onSelect: () => void } }>();
   const loadToken = useRef(0);
   const zoomRef = useRef<(factor: number | 'fit') => void>(undefined);
   const clipboard = useRef<Effect[]>([]);
@@ -122,12 +128,12 @@ export function App() {
   const durationMs = show ? show.frameCount * show.stepTimeMs : 0;
 
   const open = useCallback(
-    async (title: string, source: Doc['source'], files: LoadedFiles | { audio: Blob; blankMs: number }, token: number) => {
+    async (title: string, source: Doc['source'], files: LoadedFiles | { audio: Blob; blankMs: number }, token: number, song?: SongInfo) => {
       const project = 'blankMs' in files ? blankProject(files.blankMs) : projectFromShow(readFseq(files.fseq));
       if (token !== loadToken.current) return;
       const duration = project.frameCount * project.stepTimeMs;
       editor.load(project);
-      setDoc({ key: String(++docCounter), title, audio: files.audio, source });
+      setDoc({ key: String(++docCounter), title, audio: files.audio, source, ...(song ? { song } : {}) });
       setRange({ startMs: 0, endMs: duration });
       setPeaks(undefined);
       playback.setSource(files.audio, duration);
@@ -202,19 +208,64 @@ export function App() {
     }
   }
 
-  async function newFromSong(file: File) {
+  /** A blank show over the user's own song file; throws if the file can't be read. */
+  async function startFromSong(file: File, song?: SongInfo): Promise<{ durationMs: number; token: number }> {
     const token = ++loadToken.current;
     setError(undefined);
+    setToast(undefined);
     playback.pause();
+    const audio = new Blob([file], { type: audioType(file.name) });
+    const blankMs = await audioDurationMs(audio, file.name);
+    clearUrl();
+    await open(song?.title ?? file.name.replace(/\.[^.]+$/, ''), { kind: 'new', name: file.name }, { audio, blankMs }, token, song);
+    return { durationMs: blankMs, token };
+  }
+
+  async function newFromSong(file: File) {
     try {
-      const audio = new Blob([file], { type: audioType(file.name) });
-      const blankMs = await audioDurationMs(audio, file.name);
-      clearUrl();
-      await open(file.name.replace(/\.[^.]+$/, ''), { kind: 'new', name: file.name }, { audio, blankMs }, token);
+      const { durationMs, token } = await startFromSong(file);
+      void matchSong(file.name, durationMs, token);
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     }
   }
+
+  /** After a plain drop, quietly look the song up by its file name to add artwork and title. */
+  async function matchSong(fileName: string, durationMs: number, token: number) {
+    const term = guessFromFileName(fileName);
+    if (term.length < 3) return;
+    const match = bestMatch(await searchSongs(term, { limit: 5 }).catch(() => []), fileName, durationMs);
+    if (!match || token !== loadToken.current) return;
+    const song = songInfo(match);
+    const fileTitle = fileName.replace(/\.[^.]+$/, '');
+    setDoc((d) => d && { ...d, title: song.title, song });
+    setToast({
+      message: `Matched “${song.title}” by ${song.artist} on Apple Music.`,
+      action: {
+        label: 'Not this song',
+        onSelect: () => token === loadToken.current && setDoc((d) => d && { ...d, title: fileTitle, song: undefined }),
+      },
+    });
+  }
+
+  async function newFromSearch(file: File, song: SongInfo | undefined) {
+    if (!song) {
+      // Dropped a file in the dialog without picking a song: same as a plain drop.
+      const { durationMs, token } = await startFromSong(file);
+      setModal(undefined);
+      void matchSong(file.name, durationMs, token);
+      return;
+    }
+    const { durationMs } = await startFromSong(file, song);
+    setModal(undefined);
+    const warning = durationWarning(durationMs, song.durationMs);
+    if (warning) setToast({ message: warning, tone: 'warn' });
+  }
+
+  const findSong = useCallback(() => {
+    playback.pause();
+    setModal('song');
+  }, [playback]);
 
   // Drag and drop anywhere: a song starts a new show; a .fseq or .zip opens one.
   const [dropping, setDropping] = useState(false);
@@ -276,7 +327,10 @@ export function App() {
       if (modal || /^(INPUT|SELECT|TEXTAREA)$/.test(target.tagName)) return;
       const mod = e.ctrlKey || e.metaKey;
       const key = e.key.toLowerCase();
-      if (e.code === 'Space') {
+      if (mod && key === 'k') {
+        e.preventDefault();
+        findSong();
+      } else if (e.code === 'Space') {
         e.preventDefault();
         playback.toggle();
       } else if (e.code === 'Home') playback.seek(0);
@@ -330,7 +384,7 @@ export function App() {
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [playback, modal, editor, selectedEffects, mirrorSelection]);
+  }, [playback, modal, editor, selectedEffects, mirrorSelection, findSong]);
 
   const timeRef = useRef<HTMLSpanElement>(null);
   useEffect(
@@ -368,6 +422,7 @@ export function App() {
 
   const errors = issues.filter((i) => i.severity === 'error').length;
   const closeModal = useCallback(() => setModal(undefined), []);
+  const closeToast = useCallback(() => setToast(undefined), []);
   const libraryId = doc?.source.kind === 'library' ? doc.source.id : undefined;
 
   return (
@@ -391,14 +446,29 @@ export function App() {
             className="file-menu"
             title="Open, create or switch shows"
             label={
-              <>
-                <Library size={15} />
-                <span className="truncate">{doc?.title ?? 'Loading…'}</span>
-              </>
+              doc?.song ? (
+                <SongBadge song={doc.song} />
+              ) : (
+                <>
+                  <Library size={15} />
+                  <span className="truncate">{doc?.title ?? (loading || !started.current ? 'Loading…' : 'No show open')}</span>
+                </>
+              )
             }
             sections={[
               {
                 items: [
+                  {
+                    id: 'find',
+                    label: (
+                      <span className="menu-label-row">
+                        Find a song… <kbd>{MOD_KEY} K</kbd>
+                      </span>
+                    ),
+                    hint: 'Search by name, preview, add your copy',
+                    icon: <Search size={15} />,
+                    onSelect: findSong,
+                  },
                   { id: 'new', label: 'New show from a song…', hint: 'MP3, WAV, M4A, FLAC or OGG · or drop it anywhere', icon: <FilePlus2 size={15} />, onSelect: () => songInput.current?.click() },
                   { id: 'open', label: 'Open a show file…', hint: '.fseq (plus its music) or .zip', icon: <FolderOpen size={15} />, onSelect: () => openInput.current?.click() },
                 ],
@@ -558,7 +628,11 @@ export function App() {
               />
             </>
           ) : (
-            <p className="pane-message">{error ? '' : 'Loading…'}</p>
+            !loading && started.current ? (
+              <StartState onFind={findSong} onOpen={() => openInput.current?.click()} />
+            ) : (
+              <p className="pane-message">{error ? '' : 'Loading…'}</p>
+            )
           )}
         </section>
 
@@ -609,9 +683,11 @@ export function App() {
         />
       )}
       {modal === 'help' && <UsbHelpDialog onClose={closeModal} />}
+      {modal === 'song' && <SongSearchDialog onFile={newFromSearch} onClose={closeModal} />}
+      {toast && <Toast key={toast.message} {...toast} onClose={closeToast} />}
       {modal === 'export' && doc && show && (
         <ExportDialog
-          defaultName={showFileName(doc.title)}
+          defaultName={showFileName(doc.song?.title ?? doc.title)}
           startMs={range.startMs}
           endMs={range.endMs}
           durationMs={durationMs}
