@@ -81,8 +81,8 @@ for (const [engineName, engine] of [['Chromium', chromium], ['WebKit', webkit]])
   }
   await browser.close();
 }
-// Starting a show from the 30-second clip: an Apple result is matched on
-// Deezer and its MP3 preview downloaded.
+// Starting a show from the 30-second clip (an Apple result is matched on
+// Deezer and its MP3 preview downloaded), then auto-generating it.
 for (const [engineName, engine] of [['Chromium', chromium], ['WebKit', webkit]]) {
   section = `${engineName}: show from the 30-second clip`;
   const browser = await engine.launch();
@@ -106,6 +106,17 @@ for (const [engineName, engine] of [['Chromium', chromium], ['WebKit', webkit]])
   const transport = (await page.textContent('.transport')) ?? '';
   check(/\/\s*0:(29|30)\.\d/.test(transport), `show is about 30 s long (“${transport.trim()}”)`);
   check((await page.textContent('.file-menu .menu-trigger'))?.includes('30 s clip') ?? false, 'top bar marks it as a clip');
+  // And auto-generate a show for it.
+  if (closed) {
+    const analyzed = await page
+      .waitForFunction(() => !document.querySelector('.generate-trigger .song-spin'), null, { timeout: 60000 })
+      .then(() => true, () => false);
+    check(analyzed, 'analyzes the clip');
+    await page.click('.composer-empty button').catch(() => page.click('.generate-trigger'));
+    await page.click('.generate-actions .primary');
+    const toast = await page.waitForSelector('.toast', { timeout: 15000 }).then((t) => t.textContent(), () => null);
+    check(/Generated [\d,]+ effects/.test(toast ?? ''), `auto-generates a show (“${toast?.trim().slice(0, 60)}”)`);
+  }
   await browser.close();
 }
 

@@ -1,6 +1,7 @@
 # Song search depends on Apple's and Deezer's public APIs, which can change
 # without notice. This runs real browsers against them weekly, on demand,
-# and when the song search code changes.
+# and when the song search or auto-generate code changes, ending with a
+# show auto-generated from a real 30-second clip.
 name: Song search check
 on:
   workflow_dispatch:
@@ -12,6 +13,9 @@ on:
       - 'src/app/musicSearch.ts'
       - 'src/app/jsonp.ts'
       - 'src/app/SongSearch.tsx'
+      - 'src/app/GeneratePanel.tsx'
+      - 'src/core/analysis.ts'
+      - 'src/core/generate.ts'
       - 'src/core/songSearch.ts'
       - 'scripts/song-search-check.mjs'
       - '.github/workflows/song-search-check.yml'
