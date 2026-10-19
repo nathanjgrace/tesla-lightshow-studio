@@ -1,9 +1,9 @@
 
 ===== chromium =====
-[console.warning] [.WebGL-0x37cc001cb600]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels
-[console.warning] [.WebGL-0x37cc001cb600]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels
-[console.warning] [.WebGL-0x37cc001cb600]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels
-[console.warning] [.WebGL-0x37cc001cb600]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels (this message will no longer repeat)
+[console.warning] [.WebGL-0xe3c0175d600]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels
+[console.warning] [.WebGL-0xe3c0175d600]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels
+[console.warning] [.WebGL-0xe3c0175d600]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels
+[console.warning] [.WebGL-0xe3c0175d600]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels (this message will no longer repeat)
 [response] 200 https://itunes.apple.com/search?term=one+more+time+daft+punk&media=music&entity=song&limit=8
    content-type: text/javascript; charset=utf-8 | acao: * | vary: Origin, Accept-Encoding | nosniff: nosniff
 [dialog text] Find a song | ✕ | One More Time | Daft Punk | Discovery · 2000 | Listen on Apple Music | 5:20 | One More Time (Short Radio Edit) | Daft Punk | Musique, Vol. 1 (1993-2005) · 2000 | Listen on Apple Music | 3:55 | One More Time (12 Mix) | Daft Punk | One More Time - Single · 2000 | Listen on Apple Music | 8:00 | One More Time (Radio Edit) | Daft Punk | One More Time - Single · 2000 | Listen on Apple Music | 5:20 | One More Time (Romanthony's Unplugged) | Daft Punk | Daft Club · 2003 | Listen on Apple Music | 3:41 | One More Time (Short Radio Edit) | Daft Punk | One More Time - Single · 2000 | Listen on Apple Music | 3:55 | One More Time | Jbizz | Tattoos & Love N

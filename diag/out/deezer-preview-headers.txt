@@ -1,0 +1,21 @@
+HTTP/2 206 
+etag: CLCR6O+d/YgDEAE=
+accept-ranges: bytes
+content-type: audio/mpeg
+pragma: 
+server: Google Frontend
+traceparent: 00-c17d7296562ae85cf94f1cd29f70646d-7d470222b43b85b0-00
+x-cloud-trace-context: c17d7296562ae85cf94f1cd29f70646d/9027186326163391920
+cache-control: public, max-age=12474920
+date: Mon, 19 Oct 2026 01:38:07 GMT
+content-range: bytes 0-1000/479827
+content-length: 1001
+x-forward-proto: http
+cdn-origin-protocol: HTTP
+access-control-allow-headers: Range
+vary: Origin
+timing-allow-origin: *
+access-control-allow-origin: *
+access-control-expose-headers: x-deezer-client-ip, content-length, content-range, Akamai-Request-BC,Akamai-Request-BC
+x-deezer-client-ip: 20.102.95.51
+
