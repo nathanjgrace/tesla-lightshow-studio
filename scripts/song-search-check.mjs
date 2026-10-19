@@ -72,7 +72,10 @@ for (const [engineName, engine] of [['Chromium', chromium], ['WebKit', webkit]])
         const okSource = s.expect === 'Apple Music' ? /Apple Music|Deezer/.test(link ?? '') : link?.includes(s.expect);
         check(!!okSource, `results come from ${s.expect} (“${link?.trim()}”)`);
         await page.locator('[role="option"] button').first().click();
-        await page.waitForTimeout(2500);
+        // CI machines are slow to start audio; give it up to 8 s to get going.
+        await page
+          .waitForFunction(() => (document.querySelector('audio')?.currentTime ?? 0) > 0.5, null, { timeout: 8000 })
+          .catch(() => {});
         const t = await page.evaluate(() => document.querySelector('audio')?.currentTime ?? 0);
         check(t > 0.5, `preview plays (${t.toFixed(1)} s in)`);
       }
