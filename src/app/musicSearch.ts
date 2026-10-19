@@ -7,10 +7,13 @@
 
 import {
   deezerSearchUrl,
+  deezerTrackQuery,
   parseDeezerResults,
   parseItunesResults,
   searchUrl,
+  sameSong,
   SOURCE_NAMES,
+  type SongInfo,
   type SongResult,
   type SongSource,
 } from '../core/songSearch';
@@ -134,4 +137,36 @@ async function fetchWithTimeout(url: string, signal: AbortSignal | undefined): P
     clearTimeout(timer);
     signal?.removeEventListener('abort', onAbort);
   }
+}
+
+/**
+ * The song's 30-second preview as an audio file, for a show that uses the
+ * clip instead of the user's own copy (the owner's choice; see DESIGN §10d).
+ * Deezer's MP3 previews can be downloaded by the page (CORS: *); Apple's
+ * can't, so an Apple result is matched to the same recording on Deezer.
+ */
+export async function previewClip(song: SongResult, signal?: AbortSignal): Promise<File> {
+  let url: string | undefined;
+  if (song.source === 'deezer') {
+    url = song.previewUrl;
+  } else {
+    const json = await jsonpOrFailure((callback) => deezerSearchUrl(deezerTrackQuery(song), { limit: 10, callback }), signal);
+    url = sameSong(parseDeezerResults(json), song)?.previewUrl;
+    if (!url) throw new Error(`Couldn't find a downloadable preview of “${song.title}”. Try another version of the song, or use your own copy.`);
+  }
+  let response: Response;
+  try {
+    response = await fetchWithTimeout(url, signal);
+  } catch (e) {
+    if (isAbort(e) && signal?.aborted) throw e;
+    throw new Error("Couldn't download the preview: Deezer's preview server (dzcdn.net) didn't answer or was blocked.");
+  }
+  if (!response.ok) throw new Error(`Couldn't download the preview (HTTP ${response.status}). Search for the song again and retry.`);
+  const blob = await response.blob();
+  return new File([blob], clipFileName(song), { type: 'audio/mpeg' });
+}
+
+function clipFileName(song: SongInfo): string {
+  const safe = `${song.artist} - ${song.title}`.replace(/[\\/:*?"<>|]+/g, ' ').replace(/\s+/g, ' ').trim();
+  return `${safe} (30-second preview).mp3`;
 }

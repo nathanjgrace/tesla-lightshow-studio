@@ -75,5 +75,31 @@ for (const [engineName, engine] of [['Chromium', chromium], ['WebKit', webkit]])
   }
   await browser.close();
 }
+// Starting a show from the 30-second clip: an Apple result is matched on
+// Deezer and its MP3 preview downloaded.
+for (const [engineName, engine] of [['Chromium', chromium], ['WebKit', webkit]]) {
+  console.log(`${engineName}: show from the 30-second clip`);
+  const browser = await engine.launch();
+  const page = await browser.newPage();
+  page.on('pageerror', (e) => check(false, `page error: ${e.message}`));
+  await page.goto(SITE);
+  await page.waitForSelector('.topbar');
+  await page.keyboard.press('Control+k');
+  await page.waitForSelector('[role="combobox"]');
+  await page.keyboard.type(QUERY);
+  await page.waitForSelector('[role="option"]', { timeout: 20000 });
+  await page.locator('[role="option"]').first().click();
+  await page.click('button:has-text("Use the 30-second clip")');
+  const closed = await page
+    .waitForSelector('[role="dialog"]', { state: 'detached', timeout: 30000 })
+    .then(() => true, () => false);
+  check(closed, 'starts a show from the clip');
+  if (!closed) console.log('   dialog says:', (await page.textContent('[role="dialog"]'))?.slice(0, 300));
+  const transport = (await page.textContent('.transport')) ?? '';
+  check(/\/\s*0:(29|30)\.\d/.test(transport), `show is about 30 s long (“${transport.trim()}”)`);
+  check((await page.textContent('.file-menu .menu-trigger'))?.includes('30 s clip') ?? false, 'top bar marks it as a clip');
+  await browser.close();
+}
+
 console.log(failed ? `\n${failed} check(s) failed` : '\nAll song search checks passed');
 process.exit(failed ? 1 : 0);

@@ -1,9 +1,25 @@
-import { ArrowLeft, ArrowUpRight, FolderOpen, Info, LoaderCircle, Music, Pause, Play, RotateCw, Search, Sparkles, TriangleAlert, Upload, X } from 'lucide-react';
+import {
+  ArrowLeft,
+  ArrowUpRight,
+  FolderOpen,
+  Info,
+  LoaderCircle,
+  Music,
+  Pause,
+  Play,
+  RotateCw,
+  Scissors,
+  Search,
+  Sparkles,
+  TriangleAlert,
+  Upload,
+  X,
+} from 'lucide-react';
 import { useEffect, useRef, useState, type CSSProperties } from 'react';
 import { artworkAt, formatLength, songInfo, SOURCE_NAMES, type SongInfo, type SongResult, type SongSource } from '../core/songSearch';
 import { AUDIO_ACCEPT, isAudioFile } from '../library/load';
 import { Dialog } from './dialogs';
-import { resetSongSearch, searchSongs, SongSearchError, type SourceFailure } from './musicSearch';
+import { previewClip, resetSongSearch, searchSongs, SongSearchError, type SourceFailure } from './musicSearch';
 
 export const MOD_KEY = typeof navigator !== 'undefined' && /Mac|iPhone|iPad/.test(navigator.platform) ? '⌘' : 'Ctrl';
 const FORMATS = 'MP3, WAV, M4A, FLAC, OGG or Opus';
@@ -178,6 +194,21 @@ export function SongSearchDialog({
     requestAnimationFrame(() => input.current?.focus());
   }
 
+  /** Starts the show on the song's 30-second preview instead of the user's copy. */
+  async function useClip() {
+    if (!selected || busy) return;
+    stopPreview();
+    setBusy(true);
+    setFileError(undefined);
+    try {
+      const file = await previewClip(selected);
+      await onFile(file, { ...songInfo(selected), clip: true });
+    } catch (e) {
+      setFileError(e instanceof Error ? e.message : String(e));
+      setBusy(false);
+    }
+  }
+
   async function takeFile(file: File | undefined) {
     if (!file || busy) return;
     if (!isAudioFile(file.name)) {
@@ -310,6 +341,15 @@ export function SongSearchDialog({
                 <FolderOpen size={15} /> Choose file…
               </button>
             </div>
+            <div className="song-clip">
+              <span className="song-clip-text">
+                <span className="song-clip-title">No copy of the song?</span>
+                <span className="muted">Use its 30-second preview from Deezer. The show will be 30 seconds long.</span>
+              </span>
+              <button disabled={busy} onClick={() => void useClip()}>
+                <Scissors size={15} /> Use the 30-second clip
+              </button>
+            </div>
             {fileError && <p className="error-text song-file-error">{fileError}</p>}
           </div>
         ) : (
@@ -414,8 +454,8 @@ export function SongSearchDialog({
                       <Sparkles size={22} className="song-empty-icon accent" />
                       <p className="song-empty-title">Start with the song</p>
                       <p className="muted">
-                        Search by title or artist and listen to a preview. Then add your own copy of the track: Tesla plays the music from
-                        your USB drive, so the show needs a file you have.
+                        Search by title or artist and listen to a preview. Then add your own copy of the track for a full-length show, or
+                        use the 30-second clip.
                       </p>
                       <p className="muted small">Already have the file? Drop it here to skip the search.</p>
                     </>
@@ -433,8 +473,8 @@ export function SongSearchDialog({
         <p className="song-fineprint">
           <Info size={13} />
           <span>
-            Search and previews by Apple Music, or Deezer when Apple can't be reached. Previews are only for picking a song; they're never used in
-            your show or its export.
+            Search and previews by Apple Music, or Deezer when Apple can't be reached. Shows made from a preview clip are for personal use; the
+            song still belongs to its rights holders.
           </span>
         </p>
         <audio
@@ -468,6 +508,11 @@ export function SongBadge({ song }: { song: SongInfo }) {
         <span className="song-badge-title">{song.title}</span>
         <span className="song-badge-artist"> · {song.artist}</span>
       </span>
+      {song.clip && (
+        <span className="song-badge-clip" title="This show uses the song's 30-second preview from Deezer">
+          30 s clip
+        </span>
+      )}
     </span>
   );
 }

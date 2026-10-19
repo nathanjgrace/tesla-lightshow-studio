@@ -27,6 +27,8 @@ export interface SongInfo {
   /** Which catalog; Apple when absent (older projects). */
   source?: SongSource;
   durationMs?: number;
+  /** The show's audio is the catalog's 30-second preview, not the user's own copy. */
+  clip?: boolean;
 }
 
 /** One search result, validated. */
@@ -211,7 +213,9 @@ function coreTitle(title: string): string {
 }
 
 function primaryArtist(artist: string): string {
-  return artist.split(/\s*(?:,|&|\bfeat\.?|\bft\.?|\bx\b|\bwith\b|\band\b)\s*/i)[0]!.replace(/^the\s+/i, '');
+  const first = artist.split(/\s*(?:,|&|\bfeat\.?|\bft\.?|\bx\b|\bwith\b|\band\b)\s*/i)[0]!.replace(/^the\s+/i, '');
+  // An artist whose whole name is a separator word ("X") keeps it.
+  return first.trim() ? first : artist;
 }
 
 /** Whether a file name mentions both the song's title and its (first) artist. */
@@ -228,6 +232,27 @@ export function bestMatch<T extends SongInfo>(results: readonly T[], fileName: s
   if (fileMs === undefined) return matches[0];
   const off = (r: T) => (r.durationMs ? Math.abs(r.durationMs - fileMs) : Infinity);
   return matches.reduce<T | undefined>((best, r) => (!best || off(r) < off(best) ? r : best), undefined);
+}
+
+/** Deezer's advanced search for one song: `artist:"…" track:"…"`. */
+export function deezerTrackQuery(song: Pick<SongInfo, 'title' | 'artist'>): string {
+  const quote = (v: string) => `"${v.replace(/"/g, '')}"`;
+  return `artist:${quote(primaryArtist(song.artist))} track:${quote(coreTitle(song.title))}`;
+}
+
+/**
+ * The same recording in another catalog's results: same core title and first
+ * artist, the closest length, and the same version tag when the song has one
+ * (so a "(Radio Edit)" finds the radio edit).
+ */
+export function sameSong<T extends SongInfo>(results: readonly T[], song: SongInfo): T | undefined {
+  const title = squash(coreTitle(song.title));
+  const artist = squash(primaryArtist(song.artist));
+  const version = squash(song.title);
+  const candidates = results.filter((r) => squash(coreTitle(r.title)) === title && squash(primaryArtist(r.artist)) === artist);
+  const score = (r: T) =>
+    (squash(r.title) === version ? 0 : 60_000) + (r.durationMs && song.durationMs ? Math.abs(r.durationMs - song.durationMs) : 30_000);
+  return candidates.reduce<T | undefined>((best, r) => (!best || score(r) < score(best) ? r : best), undefined);
 }
 
 function isRecord(v: unknown): v is Record<string, unknown> {

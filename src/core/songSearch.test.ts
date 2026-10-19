@@ -8,6 +8,8 @@ import {
   guessFromFileName,
   matchesFileName,
   deezerSearchUrl,
+  deezerTrackQuery,
+  sameSong,
   parseDeezerResults,
   parseItunesResults,
   searchUrl,
@@ -209,5 +211,26 @@ describe('matching a dropped file', () => {
     expect(bestMatch(songs, 'Daft Punk - One More Time.mp3', 320_000)).toBe(daft);
     expect(bestMatch(songs, 'Daft Punk - One More Time Aerodynamic Live.mp3', 372_000)).toBe(live);
     expect(bestMatch(songs, 'my song.mp3')).toBeUndefined();
+  });
+});
+
+describe('matching a song across catalogs', () => {
+  const apple = parseItunesResults(ITUNES_SAMPLE)[0]!;
+  const deezer = parseDeezerResults(DEEZER_SAMPLE);
+
+  it('builds a Deezer query for one song', () => {
+    expect(deezerTrackQuery({ title: 'One More Time (Radio Edit)', artist: 'Daft Punk & Friends' })).toBe('artist:"Daft Punk" track:"One More Time"');
+    expect(deezerTrackQuery({ title: 'Say "Hi"', artist: 'X' })).toBe('artist:"X" track:"Say Hi"');
+  });
+
+  it('finds the same recording, preferring the same version and length', () => {
+    expect(sameSong(deezer, apple)?.id).toBe('deezer:3135553');
+    const edit = { ...apple, title: 'One More Time (Short Radio Edit)', durationMs: 235_000 };
+    expect(sameSong(deezer, edit)?.id).toBe('deezer:3157685');
+  });
+
+  it('finds nothing for a different song', () => {
+    expect(sameSong(deezer, { title: 'Around the World', artist: 'Daft Punk' })).toBeUndefined();
+    expect(sameSong(deezer, { title: 'One More Time', artist: 'Britney Spears' })).toBeUndefined();
   });
 });

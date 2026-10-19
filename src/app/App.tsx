@@ -258,7 +258,8 @@ export function App() {
     }
     const { durationMs } = await startFromSong(file, song);
     setModal(undefined);
-    const warning = durationWarning(durationMs, song.durationMs);
+    // A preview clip is short by design.
+    const warning = song.clip ? undefined : durationWarning(durationMs, song.durationMs);
     if (warning) setToast({ message: warning, tone: 'warn' });
   }
 
