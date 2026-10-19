@@ -168,8 +168,8 @@ export function ComposerBar({ editor, lead, onMirror, onDelete, onChangeSelected
           <span className="inspector-channel">{selected.length} effects selected</span>
         ) : (
           <span className="inspector-hint">
-            Drag on a row to draw · double-click adds 1 s · drag edges to resize · <kbd>M</kbd> mirrors · <kbd>Space</kbd> plays · xLights keys{' '}
-            <kbd>F</kbd> <kbd>E</kbd> <kbd>D</kbd> <kbd>C</kbd> <kbd>Q</kbd> <kbd>A</kbd> <kbd>Z</kbd> work
+            Drag on a row to draw · double-click adds 1 s · drag edges to resize · <kbd>←</kbd> <kbd>→</kbd> step by beat · <kbd>?</kbd> all
+            shortcuts
           </span>
         )}
       </div>

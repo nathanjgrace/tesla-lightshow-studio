@@ -2247,3 +2247,81 @@ button.primary kbd {
   color: #fff;
 }
 /* ---------- End song search ---------- */
+
+/* ---------- Keyboard shortcuts ---------- */
+.shortcuts {
+  position: relative;
+}
+
+.shortcuts .round.on {
+  color: var(--accent);
+}
+
+.shortcuts-card {
+  position: absolute;
+  top: calc(100% + 10px);
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 45;
+  width: min(640px, calc(100vw - 32px));
+  max-height: min(70vh, 640px);
+  overflow: auto;
+  padding: 14px 16px;
+  background: rgb(22 25 30 / 0.97);
+  backdrop-filter: blur(14px);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow);
+}
+
+.shortcuts-grid {
+  columns: 2 260px;
+  column-gap: 26px;
+}
+
+.shortcuts-grid section {
+  break-inside: avoid;
+  margin-bottom: 14px;
+}
+
+.shortcuts-grid h3 {
+  margin: 0 0 6px;
+  font-size: 11px;
+  font-weight: 650;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.shortcuts-grid dl {
+  margin: 0;
+}
+
+.shortcut-row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 3px 0;
+}
+
+.shortcut-row dt {
+  flex: none;
+  display: flex;
+  align-items: baseline;
+  gap: 3px;
+  color: var(--fg-2);
+  font-size: 12px;
+}
+
+.shortcut-row dd {
+  margin: 0;
+  text-align: right;
+  color: var(--fg);
+  font-size: 12px;
+}
+
+.shortcut-or {
+  color: var(--muted);
+}
+/* ---------- End keyboard shortcuts ---------- */

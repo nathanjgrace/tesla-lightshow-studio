@@ -34,6 +34,7 @@ import {
   type EffectKind,
 } from '../core/project';
 import { generateShow, planSections, type GenerateOptions } from '../core/generate';
+import { stepFrame, stepTime } from '../core/scrub';
 import { simulate } from '../core/simulate';
 import { bestMatch, durationWarning, guessFromFileName, songInfo, SOURCE_NAMES, type SongInfo } from '../core/songSearch';
 import { formatTime, validate } from '../core/validate';
@@ -42,6 +43,7 @@ import { DEFAULT_SHOW_ID, LIBRARY, type LibraryShow } from '../library/catalog';
 import { AUDIO_ACCEPT, audioType, fromZip, isAudioFile, loadLibraryShow, type LoadedFiles } from '../library/load';
 import { audioDurationMs, computePeaks, type Peaks } from './audio';
 import { CarView } from './CarView';
+import { Shortcuts } from './Shortcuts';
 import { Composer, type Range } from './Composer';
 import { ComposerBar } from './ComposerBar';
 import { ExportDialog, UsbHelpDialog, VinDialog } from './dialogs';
@@ -376,6 +378,16 @@ export function App() {
         e.preventDefault();
         playback.toggle();
       } else if (e.code === 'Home') playback.seek(0);
+      else if (e.code === 'End') playback.seek(durationMs);
+      else if ((key === 'arrowleft' || key === 'arrowright') && !mod) {
+        // By beat (bar with Shift) when the song is analyzed, else by ¼ s (1 s).
+        e.preventDefault();
+        const a = analysis.status === 'ready' ? analysis.analysis : undefined;
+        const grid = e.shiftKey ? a?.downbeats : a?.beats;
+        playback.seek(stepTime(playback.timeMs(), key === 'arrowright' ? 1 : -1, grid, e.shiftKey ? 1000 : 250, durationMs));
+      } else if ((key === ',' || key === '.') && !mod && show) {
+        playback.seek(stepFrame(playback.timeMs(), key === '.' ? 1 : -1, show.stepTimeMs, durationMs));
+      }
       else if (mod && key === 'z') {
         e.preventDefault();
         if (e.shiftKey) editor.redo();
@@ -426,7 +438,7 @@ export function App() {
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [playback, modal, editor, selectedEffects, mirrorSelection, findSong]);
+  }, [playback, modal, editor, selectedEffects, mirrorSelection, findSong, analysis, durationMs, show]);
 
   const timeRef = useRef<HTMLSpanElement>(null);
   useEffect(
@@ -556,6 +568,7 @@ export function App() {
             <span ref={timeRef}>0:00.0</span>
             <span className="time-total"> / {formatTime(durationMs)}</span>
           </span>
+          <Shortcuts hasBeats={analysis.status === 'ready' && analysis.analysis.beats.length > 0} />
         </div>
 
         <div className="tb-right">
