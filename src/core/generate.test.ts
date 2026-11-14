@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { Analysis, Onset, SectionKind } from './analysis';
 import { CHANNELS_BY_ID } from './channels';
-import { generateShow, musicMap, planSections, type GenerateOptions } from './generate';
+import { findDrops, generateShow, musicMap, planSections, type GenerateOptions } from './generate';
 import { blankProject, compileProject, effectFamily } from './project';
 import { validate } from './validate';
 import { VEHICLES, VEHICLES_BY_ID } from './vehicles';
@@ -118,6 +118,47 @@ describe('generateShow', () => {
     // And the doors get to move.
     const effects = generateShow(flat, VEHICLES_BY_ID.get('modelX-2021')!, FRAMES, opts());
     expect(effects.some((e) => e.channel === 'leftFalconDoor' && e.kind === 'open')).toBe(true);
+  });
+
+  it('finds the song\'s own drop', () => {
+    expect(findDrops(song())).toEqual([24000]);
+  });
+
+  it('moves the peak to a drop the user placed, with a build into it', () => {
+    const plan = planSections(song(), 0, 80000, [40000]);
+    expect(plan.map((p) => `${p.kind}@${p.startMs}`)).toEqual(['intro@0', 'build@16000', 'verse@24000', 'build@32000', 'drop@40000', 'verse@56000', 'outro@72000']);
+    // No gaps or overlaps.
+    plan.forEach((p, i) => expect(p.startMs).toBe(i ? plan[i - 1]!.endMs : 0));
+  });
+
+  it('gives a drop placed in a quiet part an eight-bar peak, and no peak without drops', () => {
+    const plan = planSections(song(), 0, 80000, [4000]);
+    expect(plan.find((p) => p.kind === 'drop')).toMatchObject({ startMs: 4000, endMs: 20000 });
+    expect(plan.filter((p) => p.kind === 'drop' || p.kind === 'chorus')).toHaveLength(1);
+    expect(planSections(song(), 0, 80000, []).some((p) => p.kind === 'drop' || p.kind === 'chorus')).toBe(false);
+  });
+
+  it('lands every light on a placed drop after a moment of darkness', () => {
+    for (const drops of [[40000], [30000, 62000]]) {
+      const { counts, frame } = litPerFrame('modelS-2021', { drops });
+      const most = Math.max(...counts);
+      for (const t of drops) {
+        expect(counts[frame(t) + 2]).toBe(most);
+        expect(counts[frame(t) - 5]).toBe(0);
+      }
+      // The song's own drop no longer gets the hit.
+      expect(counts[frame(24000) - 5]! + counts[frame(24000) + 2]!).toBeLessThan(most);
+    }
+  });
+
+  it('keeps the closure rules with placed drops', () => {
+    for (const vehicle of VEHICLES) {
+      const effects = generateShow(song(), vehicle, FRAMES, opts({ style: 'party', intensity: 1, drops: [12000, 44000, 66000] }));
+      const bad = validate(compile(effects)).filter(
+        (i) => i.severity === 'error' || ['model-x-pinch', 'dance-before-open', 'closure-limit', 'dance-thermal', 'charge-port-auto-close'].includes(i.code),
+      );
+      expect(bad.map((i) => `${vehicle.id} ${i.code}: ${i.message}`)).toEqual([]);
+    }
   });
 
   it('copes with a song without beats', () => {

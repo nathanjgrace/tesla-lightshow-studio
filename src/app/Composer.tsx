@@ -36,6 +36,7 @@ const EDGE_PX = 6;
 
 const C = {
   bg: '#0f1114',
+  drop: '#ff3b3b',
   rowAlt: '#131619',
   grid: '#20242a',
   gridMinor: '#181b20',
@@ -167,6 +168,9 @@ interface Props {
   previews?: ChannelPreviews;
   /** Mirrors the selection to the other side of the car. */
   onMirror?: () => void;
+  /** Where Auto-generate lands its drops: markers on the music, dragged to move them. */
+  drops?: readonly number[];
+  onDropsChange?: (drops: number[]) => void;
 }
 
 const SECTION_COLORS: Record<SectionKind, string> = {
@@ -189,6 +193,8 @@ export function Composer(props: Props) {
   const [hover, setHover] = useState<{ row: Row; top: number; bottom: number }>();
   /** Right-click menu: on an effect (acts on the selection) or on an empty spot of a row. */
   const [menu, setMenu] = useState<{ x: number; y: number; channel: string; timeMs: number; onEffect: boolean }>();
+  /** Right-click on the music: add a drop there, or remove the one under the pointer. */
+  const [dropMenu, setDropMenu] = useState<{ x: number; y: number; timeMs: number; index?: number }>();
 
   useEffect(() => {
     const el = host.current!;
@@ -212,6 +218,7 @@ export function Composer(props: Props) {
     // Pointer drag in progress (declared early: drawing reads createPreview).
     type Drag =
       | { kind: 'seek' }
+      | { kind: 'drop'; index: number; moved: boolean; x0: number }
       | { kind: 'range'; which: 'start' | 'end' | 'move'; grabMs: number; startMs: number; endMs: number }
       | { kind: 'create'; row: number; channel: string; anchorMs: number; moved: boolean; targetPct: number }
       | {
@@ -595,6 +602,27 @@ export function Composer(props: Props) {
         ctx.fill();
       }
 
+      // Drops: a line through the music with a handle at its foot.
+      ctx.font = '700 9px Inter Variable, system-ui, sans-serif';
+      for (const t of d().drops ?? []) {
+        const dx = xOf(t);
+        if (dx < LABEL_W || dx > width) continue;
+        const foot = HEADER_H - 1;
+        ctx.fillStyle = C.drop;
+        ctx.fillRect(Math.round(dx) - 1, RULER_H, 2, WAVE_H);
+        ctx.beginPath();
+        ctx.moveTo(dx, foot - 14);
+        ctx.lineTo(dx + 7, foot - 7);
+        ctx.lineTo(dx, foot);
+        ctx.lineTo(dx - 7, foot - 7);
+        ctx.fill();
+        const w = ctx.measureText('DROP').width + 10;
+        roundRect(ctx, dx + 9, foot - 14, w, 13, 4);
+        ctx.fill();
+        ctx.fillStyle = '#fff';
+        ctx.fillText('DROP', dx + 14, foot - 4.5);
+      }
+
       const x = xOf(playheadMs);
       if (x >= LABEL_W && x <= width) {
         ctx.fillStyle = C.playhead;
@@ -713,6 +741,7 @@ export function Composer(props: Props) {
     type Hit =
       | { zone: 'none' }
       | { zone: 'rangeStart' | 'rangeEnd' | 'rangeMove' | 'seek' }
+      | { zone: 'drop'; index: number }
       | { zone: 'effect'; effect: Effect; edge: 'start' | 'end' | 'body'; row: number }
       | { zone: 'empty'; row: number; channel: string };
 
@@ -744,6 +773,10 @@ export function Composer(props: Props) {
         const { startMs, endMs } = d().range;
         if (Math.abs(x - xOf(startMs)) <= 7) return { zone: 'rangeStart' };
         if (Math.abs(x - xOf(endMs)) <= 7) return { zone: 'rangeEnd' };
+        if (y >= RULER_H && d().onDropsChange) {
+          const index = (d().drops ?? []).findIndex((t) => Math.abs(x - xOf(t)) <= 7);
+          if (index >= 0) return { zone: 'drop', index };
+        }
         if (y < RULER_H && x > xOf(startMs) && x < xOf(endMs)) return { zone: 'rangeMove' };
         return { zone: 'seek' };
       }
@@ -807,6 +840,8 @@ export function Composer(props: Props) {
       cv.setPointerCapture(e.pointerId);
       if (h.zone === 'rangeStart' || h.zone === 'rangeEnd' || h.zone === 'rangeMove') {
         drag = { kind: 'range', which: h.zone === 'rangeStart' ? 'start' : h.zone === 'rangeEnd' ? 'end' : 'move', grabMs: t, ...d().range };
+      } else if (h.zone === 'drop') {
+        drag = { kind: 'drop', index: h.index, moved: false, x0: x };
       } else if (h.zone === 'seek') {
         drag = { kind: 'seek' };
         d().playback.seek(t);
@@ -848,18 +883,28 @@ export function Composer(props: Props) {
         } else setHover(undefined);
         const h = hit(x, y);
         cv.style.cursor =
-          h.zone === 'rangeStart' || h.zone === 'rangeEnd' || (h.zone === 'effect' && h.edge !== 'body')
+          h.zone === 'rangeStart' || h.zone === 'rangeEnd' || h.zone === 'drop' || (h.zone === 'effect' && h.edge !== 'body')
             ? 'ew-resize'
             : h.zone === 'rangeMove' || (h.zone === 'effect' && h.edge === 'body')
               ? 'grab'
               : h.zone === 'empty'
                 ? 'crosshair'
                 : 'default';
+        cv.title = h.zone === 'drop' ? 'Drop: drag to move it, right-click to remove it' : '';
         return;
       }
       const t = Math.max(0, Math.min(durationMs(), msOf(x)));
       if (drag.kind === 'seek') d().playback.seek(t);
-      else if (drag.kind === 'range') {
+      else if (drag.kind === 'drop') {
+        if (Math.abs(x - drag.x0) > 3) drag.moved = true;
+        if (!drag.moved) return;
+        const at = Math.max(0, Math.min(durationMs(), snapMs(t, e.altKey)));
+        const next = [...(d().drops ?? [])];
+        next[drag.index] = at;
+        dragLabel = { x, y: RULER_H + WAVE_H, text: `Drop at ${formatTime(at)}` };
+        d().onDropsChange?.(next);
+        drawFrame();
+      } else if (drag.kind === 'range') {
         const r = d().range;
         if (drag.which === 'start') d().onRangeChange({ startMs: Math.min(t, r.endMs - MIN_RANGE_MS), endMs: r.endMs });
         else if (drag.which === 'end') d().onRangeChange({ startMs: r.startMs, endMs: Math.max(t, r.startMs + MIN_RANGE_MS) });
@@ -954,7 +999,12 @@ export function Composer(props: Props) {
       dragLabel = undefined;
       if (!current) return;
       const editor = d().editor;
-      if (current.kind === 'create') {
+      if (current.kind === 'drop') {
+        const drops = d().drops ?? [];
+        // A click on a marker jumps there; a drag has already moved it.
+        if (!current.moved) d().playback.seek(drops[current.index] ?? 0);
+        else d().onDropsChange?.([...new Set(drops)].sort((p, q) => p - q));
+      } else if (current.kind === 'create') {
         const { x } = pointer(e);
         if (!current.moved) {
           // A click on empty space: seek there and clear the selection.
@@ -988,6 +1038,11 @@ export function Composer(props: Props) {
     function onDouble(e: MouseEvent) {
       const { x, y } = pointer(e);
       const h = hit(x, y);
+      // Double-click on the music: a drop there.
+      if (h.zone === 'seek' && y >= RULER_H && y < HEADER_H && d().onDropsChange) {
+        d().onDropsChange!([...(d().drops ?? []), snapMs(msOf(x), e.altKey)].sort((p, q) => p - q));
+        return;
+      }
       if (h.zone !== 'empty') return;
       // Double-click: a one-second effect where you clicked.
       const editor = d().editor;
@@ -1009,8 +1064,15 @@ export function Composer(props: Props) {
     function onContext(e: MouseEvent) {
       const { x, y } = pointer(e);
       const h = hit(x, y);
+      if (d().onDropsChange && x >= LABEL_W && y >= RULER_H && y < HEADER_H && (h.zone === 'drop' || h.zone === 'seek')) {
+        e.preventDefault();
+        setMenu(undefined);
+        setDropMenu({ x: Math.min(x, width - 220), y, timeMs: snapMs(msOf(x), e.altKey), ...(h.zone === 'drop' ? { index: h.index } : {}) });
+        return;
+      }
       if (h.zone !== 'effect' && h.zone !== 'empty') return;
       e.preventDefault();
+      setDropMenu(undefined);
       const editor = d().editor;
       if (h.zone === 'effect' && !editor.selection.has(h.effect.id)) editor.select([h.effect.id]);
       const channel = h.zone === 'effect' ? h.effect.channel : h.channel;
@@ -1057,7 +1119,7 @@ export function Composer(props: Props) {
   // Redraw when the data changes; re-fit when a different show opens.
   const { show, sim, profile, peaks, editor, range, docKey } = props;
   useEffect(() => redraw.current?.full(), [show, sim, profile, peaks, editor.selection, editor.snap, props.analysis]);
-  useEffect(() => redraw.current?.frame(), [range]);
+  useEffect(() => redraw.current?.frame(), [range, props.drops]);
   useEffect(() => redraw.current?.fit(), [docKey]);
   useEffect(() => {
     redraw.current?.watchPreviews?.();
@@ -1068,8 +1130,11 @@ export function Composer(props: Props) {
   useEffect(() => props.previews?.subscribe(() => setPictures((n) => n + 1)), [props.previews]);
 
   useEffect(() => {
-    if (!menu) return;
-    const close = () => setMenu(undefined);
+    if (!menu && !dropMenu) return;
+    const close = () => {
+      setMenu(undefined);
+      setDropMenu(undefined);
+    };
     const onKey = (e: KeyboardEvent) => e.key === 'Escape' && close();
     window.addEventListener('pointerdown', close);
     window.addEventListener('keydown', onKey);
@@ -1079,7 +1144,7 @@ export function Composer(props: Props) {
       window.removeEventListener('keydown', onKey);
       window.removeEventListener('blur', close);
     };
-  }, [menu]);
+  }, [menu, dropMenu]);
   const menuKinds: readonly EffectKind[] = menu ? (effectFamily(menu.channel) === 'closure' ? CLOSURE_KINDS : LIGHT_KINDS) : [];
   const selected = () => editor.project?.effects.filter((fx) => editor.selection.has(fx.id)) ?? [];
   const act = (fn: () => void) => () => {
@@ -1091,6 +1156,33 @@ export function Composer(props: Props) {
   return (
     <div ref={host} className="composer-canvas">
       <canvas ref={canvas} />
+      {dropMenu && (
+        <div className="context-menu" style={{ left: dropMenu.x, top: dropMenu.y }} role="menu" onPointerDown={(e) => e.stopPropagation()}>
+          <div className="context-menu-title">Drop at {formatTime(dropMenu.index === undefined ? dropMenu.timeMs : (props.drops?.[dropMenu.index] ?? 0))}</div>
+          {dropMenu.index === undefined ? (
+            <button
+              role="menuitem"
+              onClick={() => {
+                props.onDropsChange?.([...(props.drops ?? []), dropMenu.timeMs].sort((p, q) => p - q));
+                setDropMenu(undefined);
+              }}
+            >
+              Put a drop here
+            </button>
+          ) : (
+            <button
+              role="menuitem"
+              className="danger"
+              onClick={() => {
+                props.onDropsChange?.((props.drops ?? []).filter((_, i) => i !== dropMenu.index));
+                setDropMenu(undefined);
+              }}
+            >
+              Remove this drop
+            </button>
+          )}
+        </div>
+      )}
       {menu && (
         <div className="context-menu" style={{ left: menu.x, top: menu.y }} role="menu" onPointerDown={(e) => e.stopPropagation()}>
           <div className="context-menu-title">{menu.onEffect ? (editor.selection.size > 1 ? `${editor.selection.size} effects` : 'Effect') : `Add at ${formatTime(menu.timeMs)}`}</div>

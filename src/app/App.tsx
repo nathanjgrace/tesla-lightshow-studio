@@ -34,7 +34,7 @@ import {
   type EffectKind,
   type Project,
 } from '../core/project';
-import { generateShow, planSections, type GenerateOptions } from '../core/generate';
+import { findDrops, generateShow, planSections, type GenerateOptions } from '../core/generate';
 import { stepFrame, stepTime } from '../core/scrub';
 import { simulate } from '../core/simulate';
 import { bestMatch, durationWarning, guessFromFileName, songInfo, SOURCE_NAMES, type SongInfo } from '../core/songSearch';
@@ -160,6 +160,8 @@ export function App() {
   const [peaks, setPeaks] = useState<Peaks>();
   const [analysis, setAnalysis] = useState<AnalysisState>({ status: 'none' });
   const [generateSignal, setGenerateSignal] = useState(0);
+  /** Drops the user placed for Auto-generate; undefined uses the ones found in the song. */
+  const [placedDrops, setPlacedDrops] = useState<number[]>();
   const [loading, setLoading] = useState<{ label: string; progress?: number }>();
   const [error, setError] = useState<string>();
   const [checksOpen, setChecksOpen] = useState(false);
@@ -184,7 +186,7 @@ export function App() {
     async (
       title: string,
       source: Doc['source'],
-      files: LoadedFiles | { audio: Blob; blankMs: number } | { audio: Blob | undefined; project: Project; range: Range },
+      files: LoadedFiles | { audio: Blob; blankMs: number } | { audio: Blob | undefined; project: Project; range: Range; drops?: number[] },
       token: number,
       song?: SongInfo,
     ) => {
@@ -194,6 +196,7 @@ export function App() {
       editor.load(project);
       setDoc({ key: String(++docCounter), title, audio: files.audio, source, ...(song ? { song } : {}) });
       setRange('range' in files ? files.range : { startMs: 0, endMs: duration });
+      setPlacedDrops('drops' in files ? files.drops : undefined);
       setPeaks(undefined);
       playback.setSource(files.audio, duration);
       setLoading(undefined);
@@ -246,7 +249,7 @@ export function App() {
       if (token !== loadToken.current) return;
       const sameShow = saved && (!linked || (saved.source.kind === 'library' && saved.source.id === linked));
       if (!saved || !sameShow) return openLibrary(LIBRARY.find((s) => s.id === initialShowId())!);
-      void open(saved.title, saved.source, { audio: saved.audio, project: saved.project, range: saved.range }, token, saved.song).then(() => {
+      void open(saved.title, saved.source, { audio: saved.audio, project: saved.project, range: saved.range, ...(saved.drops ? { drops: saved.drops } : {}) }, token, saved.song).then(() => {
         if (saved.source.kind !== 'library') setToast({ message: `Picked up “${saved.title}” where you left off. It's saved in this browser as you work.` });
       });
     });
@@ -257,12 +260,12 @@ export function App() {
     const project = editor.project;
     if (!doc || !project) return;
     const timer = window.setTimeout(() => {
-      void saveSession({ title: doc.title, source: doc.source, ...(doc.song ? { song: doc.song } : {}), ...(doc.audio ? { audio: doc.audio } : {}), project, range, savedAt: Date.now() }).catch(
+      void saveSession({ title: doc.title, source: doc.source, ...(doc.song ? { song: doc.song } : {}), ...(doc.audio ? { audio: doc.audio } : {}), project, range, ...(placedDrops ? { drops: placedDrops } : {}), savedAt: Date.now() }).catch(
         () => {},
       );
     }, 600);
     return () => window.clearTimeout(timer);
-  }, [doc, editor.project, range]);
+  }, [doc, editor.project, range, placedDrops]);
 
   // Loop: keep replaying the export range.
   useEffect(() => playback.setLoop(looping && range.endMs > range.startMs ? range : undefined), [playback, looping, range]);
@@ -405,9 +408,13 @@ export function App() {
 
   // The analysis with the sections shows are built on, for the timeline and the panel.
   const planned = useMemo<AnalysisState>(
-    () => (analysis.status === 'ready' ? { status: 'ready', analysis: { ...analysis.analysis, sections: planSections(analysis.analysis) } } : analysis),
-    [analysis],
+    () =>
+      analysis.status === 'ready'
+        ? { status: 'ready', analysis: { ...analysis.analysis, sections: planSections(analysis.analysis, 0, analysis.analysis.durationMs, placedDrops) } }
+        : analysis,
+    [analysis, placedDrops],
   );
+  const drops = useMemo(() => placedDrops ?? (analysis.status === 'ready' ? findDrops(analysis.analysis) : []), [placedDrops, analysis]);
 
   /** Replaces the effects in the export range with a generated show (one undo step). */
   const generate = useCallback(
@@ -415,7 +422,7 @@ export function App() {
       const project = editor.project;
       if (!project || analysis.status !== 'ready') return;
       const { startMs, endMs } = range;
-      const generated = generateShow(analysis.analysis, vehicle, project, { ...options, startMs, endMs });
+      const generated = generateShow(analysis.analysis, vehicle, project, { ...options, startMs, endMs, ...(placedDrops ? { drops: placedDrops } : {}) });
       // Keep what's outside the range, trimming effects that cross its edges.
       const kept = project.effects.flatMap((e): Effect[] => {
         if (e.endMs <= startMs || e.startMs >= endMs) return [e];
@@ -429,7 +436,7 @@ export function App() {
       playback.seek(startMs);
       setToast({ message: `Generated ${generated.length.toLocaleString()} effects for ${vehicle.name}. Press play to watch; ${MOD_KEY} Z undoes it.` });
     },
-    [editor, analysis, range, vehicle, playback],
+    [editor, analysis, range, vehicle, playback, placedDrops],
   );
 
   const changeSelected = useCallback(
@@ -785,6 +792,11 @@ export function App() {
                     hasEffects={editor.project?.effects.some((e) => e.endMs > range.startMs && e.startMs < range.endMs) ?? false}
                     onGenerate={generate}
                     openSignal={generateSignal}
+                    drops={drops}
+                    dropsPlaced={placedDrops !== undefined}
+                    onDropsChange={setPlacedDrops}
+                    playheadMs={() => playback.timeMs()}
+                    onSeek={(t) => playback.seek(t)}
                   />
                 }
                 onMirror={mirrorSelection}
@@ -806,6 +818,7 @@ export function App() {
                 onRangeChange={setRange}
                 zoomRef={zoomRef}
                 analysis={planned.status === 'ready' ? planned.analysis : undefined}
+                {...(analysis.status === 'ready' ? { drops, onDropsChange: setPlacedDrops } : {})}
               />
               {editor.project && editor.project.effects.length === 0 && doc.audio && (
                 <div className="composer-empty">

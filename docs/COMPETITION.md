@@ -37,7 +37,7 @@ Sources: [That Lightshow](https://thatteslalightshow.com/), [Light Show Creator]
 | Mirror left↔right | ✅ (M) |
 | Waveform timeline, live preview | ✅ |
 | Validated exports | ✅ (plus closure checks nobody else has) |
-| **One-click auto-generate from beats/drops** | ✅ beats, hits, **melody** and sections drive lights and a closure planner; one light family per sound (shown in the panel), dark between hits, notes held for their length, repeated choruses look the same; three styles, intensity, variations; measured against Tesla's own choreography |
+| **One-click auto-generate from beats/drops** | ✅ beats, hits, **melody** and sections drive lights and a closure planner; one light family per sound (shown in the panel), dark between hits, notes held for their length, repeated choruses look the same; three styles, intensity, variations; **the drops can be placed or moved on the timeline and the show regenerated around them** (rivals detect the drop but don't let you correct it); measured against Tesla's own choreography |
 | Show library / sharing | Tesla examples ✅; community sharing later (M7) |
 | Flash-rate safety limit | To add to the validator |
 | Beat grid snapping | ✅ beat and bar lines, section labels, snapping to beat subdivisions |

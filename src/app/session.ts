@@ -12,6 +12,8 @@ export interface SavedSession {
   audio?: Blob;
   project: Project;
   range: { startMs: number; endMs: number };
+  /** Drops placed for Auto-generate, when the user has moved them. */
+  drops?: number[];
   savedAt: number;
 }
 

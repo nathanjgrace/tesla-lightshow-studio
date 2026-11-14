@@ -43,6 +43,11 @@ export interface GenerateOptions {
   /** Only generate in this time range (the export range). */
   startMs?: number;
   endMs?: number;
+  /**
+   * Where the drops land (ms), chosen by the user. Left out, they come from
+   * the song (findDrops). Each starts a peak, with a build into it.
+   */
+  drops?: readonly number[];
 }
 
 export const DEFAULT_OPTIONS: GenerateOptions = { style: 'balanced', intensity: 0.6, closures: true, seed: 1 };
@@ -160,7 +165,52 @@ function random(seed: number): () => number {
  * loudest stretch becomes the peak (so the big moves still happen), with a
  * short intro and outro around it.
  */
-export function planSections(a: Analysis, startMs = 0, endMs = a.durationMs): Section[] {
+export function planSections(a: Analysis, startMs = 0, endMs = a.durationMs, drops?: readonly number[]): Section[] {
+  const auto = autoSections(a, startMs, endMs);
+  return drops ? withDrops(auto, a, drops, startMs, endMs) : auto;
+}
+
+/** Where the song's own drops are: the start of each loud section that follows a quieter one. */
+export function findDrops(a: Analysis, startMs = 0, endMs = a.durationMs): number[] {
+  const plan = autoSections(a, startMs, endMs);
+  return plan.filter((s, i) => i > 0 && LEVELS[s.kind] === 'high' && LEVELS[plan[i - 1]!.kind] !== 'high').map((s) => s.startMs);
+}
+
+/**
+ * Re-plans the sections around drops the user placed. Each drop starts a
+ * peak: one the song already has there (or just after) keeps its end,
+ * otherwise it lasts eight bars. The four bars before a drop build into it,
+ * and loud stretches without a drop play as verses.
+ */
+function withDrops(auto: Section[], a: Analysis, drops: readonly number[], startMs: number, endMs: number): Section[] {
+  const barMs = a.bpm > 0 ? 240000 / a.bpm : 2000;
+  const peakMs = Math.min(24000, Math.max(8000, barMs * 8));
+  const highs = auto.filter((s) => LEVELS[s.kind] === 'high');
+  let out: Section[] = auto.map((s) => (LEVELS[s.kind] === 'high' ? { ...s, kind: 'verse', energy: Math.min(s.energy, 0.6) } : s));
+  const overlay = (s: number, e: number, kind: SectionKind, energy: number) => {
+    out = out.flatMap((x): Section[] => {
+      if (x.endMs <= s || x.startMs >= e) return [x];
+      return [...(x.startMs < s ? [{ ...x, endMs: s }] : []), ...(x.endMs > e ? [{ ...x, startMs: e }] : [])];
+    });
+    out.push({ startMs: s, endMs: e, kind, energy });
+    out.sort((p, q) => p.startMs - q.startMs);
+  };
+  const times = [...new Set(drops.map((t) => Math.round(t)))].filter((t) => t > startMs + 200 && t < endMs - 1000).sort((p, q) => p - q);
+  let prevEnd = startMs;
+  times.forEach((t, i) => {
+    const h = highs.find((x) => t >= x.startMs && t < x.endMs - 2000) ?? highs.find((x) => x.startMs > t && x.startMs <= t + peakMs);
+    const end = Math.min(h ? h.endMs : t + peakMs, times[i + 1] ?? Infinity, endMs);
+    const buildStart = Math.max(prevEnd, startMs, t - barMs * 4);
+    const before = out.find((x) => x.startMs < t && x.endMs >= t);
+    if (t - buildStart >= 1500 && before?.kind !== 'build') overlay(buildStart, t, 'build', 0.7);
+    else if (before?.kind === 'build' && before.endMs > t) overlay(before.startMs, t, 'build', before.energy);
+    overlay(t, end, 'drop', h ? Math.max(h.energy, 0.9) : 0.9);
+    prevEnd = end;
+  });
+  return out.filter((s) => s.endMs - s.startMs > 200);
+}
+
+function autoSections(a: Analysis, startMs: number, endMs: number): Section[] {
   let list = a.sections.map((s) => ({ ...s, startMs: Math.max(s.startMs, startMs), endMs: Math.min(s.endMs, endMs) }));
   list = list.filter((s) => s.endMs - s.startMs > 200);
   if (list.some((s) => LEVELS[s.kind] === 'high')) return list;
@@ -395,7 +445,7 @@ class Choreographer {
   private planned: Section[] | undefined;
 
   private sections(): Section[] {
-    return (this.planned ??= planSections(this.a, this.startMs, this.endMs));
+    return (this.planned ??= planSections(this.a, this.startMs, this.endMs, this.opts.drops));
   }
 
   /**
@@ -414,7 +464,8 @@ class Choreographer {
       else this.groove(s, level === 'high', side);
       this.interior(s, level);
       const prev = sections[i - 1];
-      if (level === 'high' && prev && LEVELS[prev.kind] !== 'high' && s.startMs > this.startMs) this.drop(s.startMs);
+      const placed = s.kind === 'drop' && this.opts.drops !== undefined;
+      if (level === 'high' && s.startMs > this.startMs && (placed || (prev && LEVELS[prev.kind] !== 'high'))) this.drop(s.startMs);
     });
   }
 

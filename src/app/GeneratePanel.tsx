@@ -1,7 +1,7 @@
 // One-click shows: the Auto-generate button in the composer toolbar and its
 // panel (style, intensity, closures, variations).
 
-import { LoaderCircle, Shuffle, Sparkles, X } from 'lucide-react';
+import { LoaderCircle, Plus, RefreshCw, Shuffle, Sparkles, X } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import type { Analysis, SectionKind } from '../core/analysis';
 import { CHANNELS_BY_ID } from '../core/channels';
@@ -59,9 +59,16 @@ interface Props {
   onGenerate: (options: GenerateOptions) => void;
   /** Opened from outside (the empty-show prompt). */
   openSignal?: number;
+  /** Where the drops land, and whether the user has placed them (rather than the song analysis). */
+  drops: readonly number[];
+  dropsPlaced: boolean;
+  /** Undefined goes back to the drops found in the song. */
+  onDropsChange: (drops: number[] | undefined) => void;
+  playheadMs: () => number;
+  onSeek: (timeMs: number) => void;
 }
 
-export function GenerateButton({ state, profile, rangeLabel, hasEffects, onGenerate, openSignal }: Props) {
+export function GenerateButton({ state, profile, rangeLabel, hasEffects, onGenerate, openSignal, drops, dropsPlaced, onDropsChange, playheadMs, onSeek }: Props) {
   const [open, setOpen] = useState(false);
   const [options, setOptions] = useState<GenerateOptions>(loadOptions);
   const ref = useRef<HTMLDivElement>(null);
@@ -96,10 +103,14 @@ export function GenerateButton({ state, profile, rangeLabel, hasEffects, onGener
 
   const ready = state.status === 'ready';
   const [generated, setGenerated] = useState(false);
+  // The drops the last generated show was built on: moving one offers a regenerate.
+  const dropsKey = drops.join(',');
+  const [builtOn, setBuiltOn] = useState<string>();
   const generate = (o: GenerateOptions) => {
     if (!ready) return;
     onGenerate(o);
     setGenerated(true);
+    setBuiltOn(dropsKey);
     setOpen(false);
   };
   const hasClosures = profile.channels.some((c) => c.kind === 'closure');
@@ -110,6 +121,11 @@ export function GenerateButton({ state, profile, rangeLabel, hasEffects, onGener
         {state.status === 'pending' ? <LoaderCircle size={15} className="song-spin" /> : <Sparkles size={15} />}
         Auto-generate
       </button>
+      {generated && !open && builtOn !== dropsKey && (
+        <button className="generate-redo" disabled={!ready} onClick={() => generate(options)} title="Build the show again around the drops as they are now">
+          <RefreshCw size={14} /> Regenerate
+        </button>
+      )}
       {generated && !open && (
         <button className="generate-again" disabled={!ready} onClick={() => generate(update({ seed: options.seed + 1 }))} title="Generate a different variation">
           <Shuffle size={15} />
@@ -125,6 +141,43 @@ export function GenerateButton({ state, profile, rangeLabel, hasEffects, onGener
           </div>
 
           <SongSummary state={state} />
+
+          {ready && (
+            <>
+              <div className="generate-label">
+                {drops.length === 1 ? 'The drop' : 'Drops'}
+                {dropsPlaced && (
+                  <button className="generate-link" onClick={() => onDropsChange(undefined)}>
+                    Use the song's
+                  </button>
+                )}
+              </div>
+              <div className="generate-drops">
+                {drops.map((t, i) => (
+                  <span key={t} className="generate-drop">
+                    <button onClick={() => onSeek(t)} title="Jump there">
+                      {formatTime(t)}
+                    </button>
+                    <button onClick={() => onDropsChange(drops.filter((_, j) => j !== i))} aria-label={`Remove the drop at ${formatTime(t)}`} title="Remove">
+                      <X size={12} />
+                    </button>
+                  </span>
+                ))}
+                {drops.length === 0 && <span className="muted">None: the show stays even throughout.</span>}
+                <button
+                  className="generate-drop-add"
+                  onClick={() => onDropsChange([...new Set([...drops, Math.round(playheadMs())])].sort((a, b) => a - b))}
+                  title="Put a drop where the playhead is"
+                >
+                  <Plus size={13} /> At the playhead
+                </button>
+              </div>
+              <p className="generate-hint">
+                Where every light hits at once, with a build before and the big moves after. Drag the red markers on the music to move them; double-click the music to
+                add one.
+              </p>
+            </>
+          )}
 
           <div className="generate-label">Style</div>
           <div className="generate-styles" role="radiogroup" aria-label="Style">

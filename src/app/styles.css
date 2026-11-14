@@ -2722,3 +2722,78 @@ button.primary kbd {
   padding: 0 10px;
   font-size: 12px;
 }
+
+/* Drops in the Auto-generate panel */
+.generate-link {
+  padding: 0;
+  height: auto;
+  border: none;
+  background: none;
+  color: var(--accent);
+  font-size: 11px;
+  font-weight: 550;
+}
+
+.generate-link:hover {
+  border: none;
+  background: none;
+  text-decoration: underline;
+}
+
+.generate-drops {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+}
+
+.generate-drop {
+  display: inline-flex;
+  align-items: center;
+  height: 24px;
+  border-radius: 6px;
+  background: rgb(255 59 59 / 0.16);
+  border: 1px solid rgb(255 59 59 / 0.45);
+}
+
+.generate-drop button {
+  height: 22px;
+  padding: 0 6px;
+  border: none;
+  background: none;
+  color: #ffb4b4;
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+
+.generate-drop button:hover {
+  border: none;
+  background: rgb(255 59 59 / 0.25);
+  color: #fff;
+}
+
+.generate-drop-add {
+  gap: 4px;
+  height: 24px;
+  padding: 0 8px;
+  font-size: 12px;
+}
+
+.generate-hint {
+  margin: 8px 0 0;
+  color: #6b727c;
+  font-size: 11px;
+  line-height: 1.4;
+}
+
+.generate-redo {
+  gap: 6px;
+  border-color: rgb(255 59 59 / 0.6);
+  background: rgb(255 59 59 / 0.16);
+  color: #ffd0d0;
+}
+
+.generate-redo:hover {
+  background: rgb(255 59 59 / 0.28);
+}
