@@ -7,6 +7,7 @@
 import { CHANNEL_COUNT, CHANNELS, LEGACY_CHANNEL_COUNT, type ChannelDef } from './channels';
 import { decodeClosure, type ClosureCommand } from './encoding';
 import type { FseqFile } from './fseq';
+import type { VehicleProfile } from './vehicles';
 
 export type Severity = 'error' | 'warning';
 
@@ -17,6 +18,16 @@ export interface Issue {
   channelId?: string;
   /** Where in the show the problem starts, in ms. */
   timeMs?: number;
+}
+
+/**
+ * Whether an issue matters on a given car. A show file plays on any Tesla,
+ * so a problem with falcon doors is real but won't happen on a Model 3.
+ */
+export function issueApplies(issue: Issue, profile: VehicleProfile): boolean {
+  if (issue.severity === 'error') return true;
+  if (issue.code === 'model-x-pinch') return profile.model === 'modelX';
+  return !issue.channelId || profile.channels.some((c) => c.id === issue.channelId);
 }
 
 const MIN_STEP_MS = 15;

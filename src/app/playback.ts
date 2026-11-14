@@ -14,7 +14,40 @@ export class Playback {
   private clockStart = 0;
   private pausedAt = 0;
   private playing = false;
+  private rate = 1;
+  private muted = false;
+  /** While set, playback wraps from the end of this range back to its start. */
+  private loop: { startMs: number; endMs: number } | undefined;
   durationMs = 0;
+
+  /** Playback speed: 1, or slower for checking fine timing. */
+  setRate(rate: number): void {
+    const t = this.timeMs();
+    this.rate = rate;
+    if (this.audio) {
+      this.audio.playbackRate = rate;
+      this.audio.preservesPitch = true;
+    } else if (this.playing) this.clockStart = performance.now() - t / rate;
+    this.emitState();
+  }
+
+  get playbackRate(): number {
+    return this.rate;
+  }
+
+  setMuted(muted: boolean): void {
+    this.muted = muted;
+    if (this.audio) this.audio.muted = muted;
+    this.emitState();
+  }
+
+  get isMuted(): boolean {
+    return this.muted;
+  }
+
+  setLoop(range: { startMs: number; endMs: number } | undefined): void {
+    this.loop = range;
+  }
 
   setSource(audio: Blob | undefined, durationMs: number): void {
     this.pause();
@@ -28,7 +61,14 @@ export class Playback {
       this.audioUrl = URL.createObjectURL(audio);
       this.audio = new Audio(this.audioUrl);
       this.audio.preload = 'auto';
-      this.audio.addEventListener('ended', () => this.pause());
+      this.audio.playbackRate = this.rate;
+      this.audio.muted = this.muted;
+      this.audio.addEventListener('ended', () => {
+        if (this.loop && this.playing) {
+          this.seek(this.loop.startMs);
+          void this.audio?.play().catch(() => this.pause());
+        } else this.pause();
+      });
     }
     this.emit();
   }
@@ -39,22 +79,27 @@ export class Playback {
 
   timeMs(): number {
     if (!this.playing) return this.pausedAt;
-    const t = this.audio ? this.audio.currentTime * 1000 : performance.now() - this.clockStart;
+    const t = this.audio ? this.audio.currentTime * 1000 : (performance.now() - this.clockStart) * this.rate;
     return Math.min(t, this.durationMs);
   }
 
   play(): void {
     if (this.playing) return;
     if (this.pausedAt >= this.durationMs) this.pausedAt = 0;
+    if (this.loop && (this.pausedAt >= this.loop.endMs || this.pausedAt < this.loop.startMs)) this.pausedAt = this.loop.startMs;
     this.playing = true;
     if (this.audio) {
       this.audio.currentTime = this.pausedAt / 1000;
       void this.audio.play().catch(() => this.pause());
     } else {
-      this.clockStart = performance.now() - this.pausedAt;
+      this.clockStart = performance.now() - this.pausedAt / this.rate;
     }
     const tick = () => {
-      const t = this.timeMs();
+      let t = this.timeMs();
+      if (this.loop && t >= Math.min(this.loop.endMs, this.durationMs) - 1) {
+        this.seek(this.loop.startMs);
+        t = this.loop.startMs;
+      }
       for (const l of this.listeners) l(t);
       if (!this.audio && t >= this.durationMs) {
         this.pause();
@@ -85,7 +130,7 @@ export class Playback {
     const t = Math.max(0, Math.min(timeMs, this.durationMs));
     if (this.playing) {
       if (this.audio) this.audio.currentTime = t / 1000;
-      else this.clockStart = performance.now() - t;
+      else this.clockStart = performance.now() - t / this.rate;
     } else {
       this.pausedAt = t;
     }

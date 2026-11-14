@@ -30,6 +30,7 @@ function groups(hasBeats: boolean): { title: string; rows: Row[] }[] {
         [or(k('←'), k('→')), hasBeats ? 'Previous / next beat' : 'Back / forward ¼ second'],
         [or(k('Shift', '←'), k('Shift', '→')), hasBeats ? 'Previous / next bar' : 'Back / forward 1 second'],
         [or(k(','), k('.')), 'One frame back / forward'],
+        [k('L'), 'Loop the export range'],
       ],
     },
     {

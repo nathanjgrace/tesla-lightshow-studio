@@ -13,9 +13,10 @@ import {
   Search,
   SkipBack,
   Sparkles,
+  Repeat,
   TriangleAlert,
-  User,
-  Users,
+  Volume2,
+  VolumeX,
 } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
 import { showFileName } from '../core/export';
@@ -31,12 +32,13 @@ import {
   projectFromShow,
   type Effect,
   type EffectKind,
+  type Project,
 } from '../core/project';
 import { generateShow, planSections, type GenerateOptions } from '../core/generate';
 import { stepFrame, stepTime } from '../core/scrub';
 import { simulate } from '../core/simulate';
 import { bestMatch, durationWarning, guessFromFileName, songInfo, SOURCE_NAMES, type SongInfo } from '../core/songSearch';
-import { formatTime, validate } from '../core/validate';
+import { formatTime, issueApplies, validate, type Issue } from '../core/validate';
 import { DEFAULT_VEHICLE_ID, VEHICLES_BY_ID, vehiclesByModel, type VehicleProfile } from '../core/vehicles';
 import { DEFAULT_SHOW_ID, LIBRARY, type LibraryShow } from '../library/catalog';
 import { AUDIO_ACCEPT, audioType, fromZip, isAudioFile, loadLibraryShow, type LoadedFiles } from '../library/load';
@@ -56,11 +58,11 @@ import { analyzeSong } from './musicAnalysis';
 import { searchSongs } from './musicSearch';
 import { Menu } from './Menu';
 import { Playback } from './playback';
+import { loadSession, saveSession } from './session';
 import { MOD_KEY, SongBadge, SongSearchDialog, StartState, Toast } from './SongSearch';
 import { useEditor } from './useEditor';
 
 type Layout = 'side' | 'stack';
-type CarMode = 'single' | 'multi';
 type Modal = 'vin' | 'export' | 'help' | 'song' | undefined;
 
 interface Doc {
@@ -90,6 +92,21 @@ function store(key: string, value: string): void {
   }
 }
 
+function IssueList({ issues, onSeek }: { issues: Issue[]; onSeek: (timeMs: number) => void }) {
+  return (
+    <ul>
+      {issues.map((issue, i) => (
+        <li key={i} className={`issue ${issue.severity}`}>
+          <button className="when" disabled={issue.timeMs === undefined} onClick={() => issue.timeMs !== undefined && onSeek(issue.timeMs)}>
+            {issue.timeMs !== undefined ? formatTime(issue.timeMs) : '—'}
+          </button>
+          <span>{issue.message}</span>
+        </li>
+      ))}
+    </ul>
+  );
+}
+
 function initialShowId(): string {
   const id = new URLSearchParams(location.search).get('show');
   return LIBRARY.find((s) => s.id === id)?.id ?? DEFAULT_SHOW_ID;
@@ -107,7 +124,15 @@ export function App() {
     () => playback.isPlaying,
   );
 
-  const [layout, setLayout] = useState<Layout>(() => (stored('layout') === 'stack' ? 'stack' : 'side'));
+  const [chosenLayout, setLayout] = useState<Layout>(() => (stored('layout') === 'stack' ? 'stack' : 'side'));
+  // Too narrow for two columns (a phone, a small window): always top and bottom.
+  const [narrow, setNarrow] = useState(() => window.innerWidth < 760);
+  useEffect(() => {
+    const onResize = () => setNarrow(window.innerWidth < 760);
+    window.addEventListener('resize', onResize);
+    return () => window.removeEventListener('resize', onResize);
+  }, []);
+  const layout: Layout = narrow ? 'stack' : chosenLayout;
   const [split, setSplit] = useState(() => {
     const v = Number(stored('split'));
     return v > 0.15 && v < 0.85 ? v : 0.38;
@@ -119,7 +144,9 @@ export function App() {
   const [carScene, setCarScene] = useState<CarScene>();
   const previews = useMemo(() => carScene && new ChannelPreviews(carScene), [carScene]);
   useEffect(() => () => previews?.dispose(), [previews]);
-  const [carMode, setCarMode] = useState<CarMode>('single');
+  const [looping, setLooping] = useState(false);
+  const muted = useSyncExternalStore((cb) => playback.subscribeState(cb), () => playback.isMuted);
+  const rate = useSyncExternalStore((cb) => playback.subscribeState(cb), () => playback.playbackRate);
   const [doc, setDoc] = useState<Doc>();
   const [range, setRange] = useState<Range>({ startMs: 0, endMs: 0 });
   const [peaks, setPeaks] = useState<Peaks>();
@@ -139,17 +166,26 @@ export function App() {
   // The show is compiled from the editable project; everything else derives from it.
   const show = useMemo(() => (editor.project ? compileProject(editor.project) : undefined), [editor.project]);
   const sim = useMemo(() => (show ? simulate(show, vehicle) : undefined), [show, vehicle]);
-  const issues = useMemo(() => (show ? validate(show) : []), [show]);
+  const allIssues = useMemo(() => (show ? validate(show) : []), [show]);
+  // A show plays on any Tesla; problems that can't happen on the chosen car are listed apart.
+  const issues = useMemo(() => allIssues.filter((i) => issueApplies(i, vehicle)), [allIssues, vehicle]);
+  const otherIssues = useMemo(() => allIssues.filter((i) => !issueApplies(i, vehicle)), [allIssues, vehicle]);
   const durationMs = show ? show.frameCount * show.stepTimeMs : 0;
 
   const open = useCallback(
-    async (title: string, source: Doc['source'], files: LoadedFiles | { audio: Blob; blankMs: number }, token: number, song?: SongInfo) => {
-      const project = 'blankMs' in files ? blankProject(files.blankMs) : projectFromShow(readFseq(files.fseq));
+    async (
+      title: string,
+      source: Doc['source'],
+      files: LoadedFiles | { audio: Blob; blankMs: number } | { audio: Blob | undefined; project: Project; range: Range },
+      token: number,
+      song?: SongInfo,
+    ) => {
+      const project = 'project' in files ? files.project : 'blankMs' in files ? blankProject(files.blankMs) : projectFromShow(readFseq(files.fseq));
       if (token !== loadToken.current) return;
       const duration = project.frameCount * project.stepTimeMs;
       editor.load(project);
       setDoc({ key: String(++docCounter), title, audio: files.audio, source, ...(song ? { song } : {}) });
-      setRange({ startMs: 0, endMs: duration });
+      setRange('range' in files ? files.range : { startMs: 0, endMs: duration });
       setPeaks(undefined);
       playback.setSource(files.audio, duration);
       setLoading(undefined);
@@ -195,8 +231,33 @@ export function App() {
   useEffect(() => {
     if (started.current) return;
     started.current = true;
-    openLibrary(LIBRARY.find((s) => s.id === initialShowId())!);
-  }, [openLibrary]);
+    const linked = new URLSearchParams(location.search).get('show');
+    const token = ++loadToken.current;
+    // Pick up the show that was open last time, unless the link asks for a different one.
+    void loadSession().then((saved) => {
+      if (token !== loadToken.current) return;
+      const sameShow = saved && (!linked || (saved.source.kind === 'library' && saved.source.id === linked));
+      if (!saved || !sameShow) return openLibrary(LIBRARY.find((s) => s.id === initialShowId())!);
+      void open(saved.title, saved.source, { audio: saved.audio, project: saved.project, range: saved.range }, token, saved.song).then(() => {
+        if (saved.source.kind !== 'library') setToast({ message: `Picked up “${saved.title}” where you left off. It's saved in this browser as you work.` });
+      });
+    });
+  }, [openLibrary, open]);
+
+  // Autosave, shortly after each change.
+  useEffect(() => {
+    const project = editor.project;
+    if (!doc || !project) return;
+    const timer = window.setTimeout(() => {
+      void saveSession({ title: doc.title, source: doc.source, ...(doc.song ? { song: doc.song } : {}), ...(doc.audio ? { audio: doc.audio } : {}), project, range, savedAt: Date.now() }).catch(
+        () => {},
+      );
+    }, 600);
+    return () => window.clearTimeout(timer);
+  }, [doc, editor.project, range]);
+
+  // Loop: keep replaying the export range.
+  useEffect(() => playback.setLoop(looping && range.endMs > range.startMs ? range : undefined), [playback, looping, range]);
 
   function clearUrl() {
     const url = new URL(location.href);
@@ -448,6 +509,7 @@ export function App() {
         editor.remove(editor.selection);
       } else if (key === 'escape') editor.select([]);
       else if (key === 'm' && !mod) mirrorSelection();
+      else if (key === 'l' && !mod) setLooping((l) => !l);
       else if (!mod && EFFECT_HOTKEYS[key]) {
         // Like xLights: the hotkey changes the selected effects (F is Stop on doors) and sets the brush.
         const kind = EFFECT_HOTKEYS[key]!;
@@ -626,18 +688,30 @@ export function App() {
             <span ref={timeRef}>0:00.0</span>
             <span className="time-total"> / {formatTime(durationMs)}</span>
           </span>
+          <button
+            className={`round${looping ? ' on' : ''}`}
+            onClick={() => setLooping((l) => !l)}
+            aria-pressed={looping}
+            title={looping ? 'Looping the export range (L)' : 'Loop the export range (L)'}
+            aria-label="Loop the export range"
+          >
+            <Repeat size={15} />
+          </button>
+          <button
+            className={`round speed${rate !== 1 ? ' on' : ''}`}
+            onClick={() => playback.setRate(rate === 1 ? 0.5 : rate === 0.5 ? 0.25 : 1)}
+            title="Playback speed: full, half or quarter, for checking timing"
+            aria-label={`Playback speed ${rate}×`}
+          >
+            {rate === 1 ? '1×' : rate === 0.5 ? '½×' : '¼×'}
+          </button>
+          <button className={`round${muted ? ' on' : ''}`} onClick={() => playback.setMuted(!muted)} aria-pressed={muted} title={muted ? 'Unmute' : 'Mute'} aria-label="Mute">
+            {muted ? <VolumeX size={15} /> : <Volume2 size={15} />}
+          </button>
           <Shortcuts hasBeats={analysis.status === 'ready' && analysis.analysis.beats.length > 0} />
         </div>
 
         <div className="tb-right">
-          <div className="segmented" role="group" aria-label="Number of cars">
-            <button className={carMode === 'single' ? 'on' : ''} onClick={() => setCarMode('single')} title="Single car">
-              <User size={15} />
-            </button>
-            <button className={carMode === 'multi' ? 'on' : ''} onClick={() => setCarMode('multi')} title="Multiple cars (coming later)">
-              <Users size={15} />
-            </button>
-          </div>
           {show && (
             <div className="checks">
               <button
@@ -651,21 +725,16 @@ export function App() {
               {checksOpen && (
                 <div className="popover" role="dialog" aria-label="Show checks">
                   <p className="popover-title">Checks against Tesla's rules</p>
-                  {issues.length === 0 && <p className="muted">No problems found.</p>}
-                  <ul>
-                    {issues.map((issue, i) => (
-                      <li key={i} className={`issue ${issue.severity}`}>
-                        <button
-                          className="when"
-                          disabled={issue.timeMs === undefined}
-                          onClick={() => issue.timeMs !== undefined && playback.seek(issue.timeMs)}
-                        >
-                          {issue.timeMs !== undefined ? formatTime(issue.timeMs) : '—'}
-                        </button>
-                        <span>{issue.message}</span>
-                      </li>
-                    ))}
-                  </ul>
+                  {issues.length === 0 && <p className="muted">No problems on the {vehicle.name.replace(/ \d{4}.*/, '')}.</p>}
+                  <IssueList issues={issues} onSeek={(t) => playback.seek(t)} />
+                  {otherIssues.length > 0 && (
+                    <details className="other-issues">
+                      <summary>
+                        {otherIssues.length} more on other Teslas (this show file plays on any model)
+                      </summary>
+                      <IssueList issues={otherIssues} onSeek={(t) => playback.seek(t)} />
+                    </details>
+                  )}
                 </div>
               )}
             </div>
@@ -682,7 +751,7 @@ export function App() {
       <div
         ref={panes}
         className={`panes ${layout}`}
-        style={{ gridTemplate: layout === 'side' ? `1fr / ${split}fr 5px ${1 - split}fr` : `${split}fr 5px ${1 - split}fr / 1fr` }}
+        style={{ gridTemplate: layout === 'side' ? `1fr / ${split}fr 5px ${1 - split}fr` : `${split}fr 5px ${1 - split}fr / minmax(0, 1fr)` }}
       >
         <section className="pane car-pane">
           <CarView sim={sim} vehicle={vehicle} playback={playback} look={look} onScene={setCarScene} />
@@ -745,23 +814,6 @@ export function App() {
             )
           )}
         </section>
-
-        {carMode === 'multi' && (
-          <div className="overlay">
-            <div className="overlay-card">
-              <p className="overlay-title">
-                <Users size={16} /> Multiple cars: coming later
-              </p>
-              <p className="muted">
-                This mode will choreograph several cars parked side by side (Tesla supports synchronized shows across several cars), with
-                sweeps that travel from car to car and one show file per car. For now the editor works on a single car.
-              </p>
-              <button className="primary" onClick={() => setCarMode('single')}>
-                Back to single car
-              </button>
-            </div>
-          </div>
-        )}
 
         {(loading || error) && (
           <div className="overlay">

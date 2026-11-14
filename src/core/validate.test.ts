@@ -3,7 +3,8 @@ import { describe, expect, it } from 'vitest';
 import { CLOSURE_BYTES } from './encoding';
 import { readFseq } from './fseq';
 import { blankShow, fill } from './testing';
-import { validate } from './validate';
+import { issueApplies, validate } from './validate';
+import { VEHICLES_BY_ID } from './vehicles';
 
 const { open, dance, close, stop } = CLOSURE_BYTES;
 const codes = (show: ReturnType<typeof blankShow>) => validate(show).map((i) => i.code);
@@ -124,3 +125,21 @@ describe("Tesla's example shows", () => {
     });
   }
 });
+
+describe('issueApplies', () => {
+  const s = VEHICLES_BY_ID.get('modelS-2021')!;
+  const x = VEHICLES_BY_ID.get('modelX-2021')!;
+  it('keeps Model X pinch warnings for the Model X', () => {
+    const issue = { severity: 'warning' as const, code: 'model-x-pinch', message: '', channelId: 'leftFrontWindow' };
+    expect(issueApplies(issue, x)).toBe(true);
+    expect(issueApplies(issue, s)).toBe(false);
+  });
+  it('drops warnings about parts the car lacks, never errors', () => {
+    const falcon = { severity: 'warning' as const, code: 'closure-limit', message: '', channelId: 'leftFalconDoor' };
+    expect(issueApplies(falcon, x)).toBe(true);
+    expect(issueApplies(falcon, s)).toBe(false);
+    expect(issueApplies({ ...falcon, severity: 'error' }, s)).toBe(true);
+    expect(issueApplies({ severity: 'warning', code: 'fseq-version', message: '' }, s)).toBe(true);
+  });
+});
+

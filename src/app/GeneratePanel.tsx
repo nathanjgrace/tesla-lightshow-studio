@@ -234,7 +234,7 @@ function SongSummary({ state }: { state: AnalysisState }) {
             style={{ flexGrow: (s.endMs - s.startMs) / total }}
             title={`${SECTION_LABELS[s.kind]} · ${formatTime(s.startMs)}–${formatTime(s.endMs)}`}
           >
-            {(s.endMs - s.startMs) / total > 0.09 ? SECTION_LABELS[s.kind] : ''}
+            {(s.endMs - s.startMs) / total > 0.14 ? SECTION_LABELS[s.kind] : ''}
           </span>
         ))}
       </div>

@@ -2514,3 +2514,87 @@ button.primary kbd {
   font-size: 12px;
   line-height: 1.45;
 }
+
+/* Transport toggles (loop, speed, mute) */
+.transport .round.on {
+  color: var(--accent-hover);
+}
+
+.transport .round.speed {
+  font-size: 11.5px;
+  font-weight: 650;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Checks that can't happen on the chosen car */
+.other-issues {
+  margin-top: 10px;
+  color: var(--muted);
+}
+
+.other-issues summary {
+  padding: 4px 2px 8px;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.other-issues .issue {
+  opacity: 0.75;
+}
+
+/* Not wide enough to center the transport between the two sides. */
+@media (max-width: 1240px) {
+  .topbar {
+    display: flex;
+    justify-content: space-between;
+    gap: 8px;
+  }
+
+  .tb-left {
+    flex: 0 1 auto;
+  }
+
+  .tb-center {
+    flex: none;
+  }
+
+  .tb-right {
+    flex: 0 0 auto;
+  }
+}
+
+@media (max-width: 760px) {
+  .app {
+    min-width: 0;
+  }
+
+  /* The layout toggle does nothing on a narrow screen: it's always stacked. */
+  .tb-left > .segmented {
+    display: none;
+  }
+
+  .topbar {
+    flex-wrap: wrap;
+    height: auto;
+    padding: 6px 8px;
+    row-gap: 6px;
+  }
+
+  .tb-left {
+    flex: 1 1 100%;
+  }
+
+  .tb-center {
+    flex: 1 1 auto;
+    justify-content: space-between;
+  }
+
+  .tb-right {
+    flex: 0 0 auto;
+  }
+
+  .transport .time-total,
+  .shortcuts {
+    display: none;
+  }
+}
