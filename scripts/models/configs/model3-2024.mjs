@@ -237,7 +237,7 @@ export default {
     // The thin band inside the C, along its top and down its spine.
     ...sides((side, s) => ({ ids: [`${side}RearTurn`], color: 'amber', select: [{ mat: /\| Lights$/, box: on(s, [[-2.16, 0.88, 0.55], [-2.14, 0.9, 0.58]]), mode: 'center' }] })),
     // The red strips on the fenders ahead of the tail lamps (the left one is on the charge port door).
-    ...sides((side, s) => ({ ids: [`${side}SideMarker`], color: 'red', select: [{ mat: /EXT_Taillight_Glass/, box: on(s, [[-2.05, 0.86, 0.75], [-1.87, 0.94, 0.8]]) }] })),
+    // No side marker lamp: the model's only candidates are the red rear-fender reflectors, and the channel is a front amber marker.
     // Low in the bumper: a white strip under a red one, on each side.
     { ids: ['reverseLights'], select: sides((side, s) => ({ mat: /\| Lights$/, box: on(s, [[-2.33, 0.36, 0.32], [-2.2, 0.4, 0.6]]) })) },
     { ids: ['rearFog'], color: 'red', select: sides((side, s) => ({ mat: TAIL, clip: on(s, [[-2.4, 0.3895, 0.28], [-2.2, 0.42, 0.6]]) })) },
