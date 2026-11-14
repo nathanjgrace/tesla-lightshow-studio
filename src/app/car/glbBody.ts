@@ -17,9 +17,10 @@ export function buildGlbBody(b: Builder, asset: GlbAsset): BuiltBody {
   b.car.add(root);
 
   // Clear covers over the lamps: you see the housings through them, and the
-  // lamps' own glow is added on top.
-  const lens = new THREE.MeshPhysicalMaterial({ color: '#c9ced6', roughness: 0.08, metalness: 0, transparent: true, opacity: 0.22, depthWrite: false, envMapIntensity: 0.5 });
-  const redLens = new THREE.MeshPhysicalMaterial({ color: '#7a0a0c', roughness: 0.1, metalness: 0, transparent: true, opacity: 0.55, depthWrite: false, envMapIntensity: 0.5 });
+  // lamps' own glow is added on top. Almost no highlights: a lot lamp mirrored
+  // in a lamp cover looks exactly like that lamp being on.
+  const lens = new THREE.MeshPhysicalMaterial({ color: '#c9ced6', roughness: 0.3, metalness: 0, transparent: true, opacity: 0.22, depthWrite: false, envMapIntensity: 0.3, specularIntensity: 0.05 });
+  const redLens = new THREE.MeshPhysicalMaterial({ color: '#7a0a0c', roughness: 0.3, metalness: 0, transparent: true, opacity: 0.55, depthWrite: false, envMapIntensity: 0.3, specularIntensity: 0.05 });
   const swaps: Record<string, THREE.Material> = { paint: insideFaces(b.m.paint), glass: b.m.sideGlass, lens, redlens: redLens };
 
   // Moving parts: a group at each pivot, nested where one rides on another.

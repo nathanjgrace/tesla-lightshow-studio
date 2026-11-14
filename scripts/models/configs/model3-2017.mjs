@@ -167,7 +167,16 @@ export default {
     // Tail lamps: the red C on the body and its continuation on the trunk lid, plus the side marker on the fender.
     ...sides((side, s) => ({ ids: [`${side}Tail`], color: 'red', select: [{ mat: /Feux_rouge$/, box: on(s, [[-2.24, 0.76, 0.38], [-1.84, 0.93, 0.8]]) }] })),
     // Brake: the pods inside the C, and the strip at the bottom of the rear window.
-    { ids: ['brakeLights'], color: 'red', select: [{ mat: /\| Chrome$/, box: [[-2.22, 0.82, -0.74], [-2.02, 0.9, 0.74]] }, { mat: /Feux_stop/ }] },
+    {
+      ids: ['brakeLights'],
+      color: 'red',
+      select: [
+        { mat: /\| Chrome$/, box: [[-2.22, 0.82, -0.74], [-2.02, 0.9, 0.74]] },
+        { mat: /Feux_stop/ },
+        // The strip sits under the rear glass, which hides it: light the glass over it too.
+        { mat: /\| Vitre$/, clip: [[-1.962, 1.09, -0.32], [-1.885, 1.15, 0.32]] },
+      ],
+    },
     // The bar inside each pod: turn signal on the body, reverse on the trunk lid.
     ...sides((side, s) => ({ ids: [`${side}RearTurn`], color: 'amber', select: [{ mat: /Feux_blanc/, box: on(s, [[-2.14, 0.84, 0.6], [-2.05, 0.87, 0.72]]) }] })),
     { ids: ['reverseLights'], select: [{ mat: /Feux_blanc/, box: [[-2.21, 0.84, -0.6], [-2.12, 0.87, 0.6]], mode: 'center' }] },
