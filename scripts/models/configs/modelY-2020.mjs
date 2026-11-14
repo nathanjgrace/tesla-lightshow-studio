@@ -9,13 +9,41 @@ const sides = (fn) => [fn('left', -1), fn('right', 1)];
 /** A box given for the right side (z > 0), on the chosen side. */
 const on = (s, box) => (s > 0 ? box : mirrorBox(box));
 
-// --- Source fix-up -----------------------------------------------------------
-// The source puts the window glass and the clear lamp covers in the same
-// primitives (material Carro_Vidros2), and the pipeline assigns materials per
-// primitive. Windows must become `glass` (dark, writes depth) and covers
-// `lens` (clear, lamps glow through), so the covers are moved to primitives of
-// their own ("<node>_lens | Carro_Lente") as the source is read. Windows all
-// reach above 1.4 m; lamp covers stay below 1.15 m.
+// --- Source fix-ups -----------------------------------------------------------
+// Two things the pipeline can't express are done to the source as it is read
+// (inspect.mjs and build.mjs both read it after loading this config, so they
+// see the same primitives):
+//
+// 1. The source puts the window glass and the clear lamp covers in the same
+//    primitives (material Carro_Vidros2), and materials are assigned per
+//    primitive. Windows must become `glass` (dark, writes depth) and covers
+//    `lens` (clear, lamps glow through), so the covers are moved to primitives
+//    of their own ("<node>_lens | Carro_Lente"). Windows all reach above
+//    1.4 m; lamp covers stay below 1.15 m.
+// 2. Each mirror's gloss shell is one piece with its arm on the door, and its
+//    triangles are long slivers, so selecting the head triangle by triangle
+//    leaves a ragged edge when it folds. The shell is cut along the plane
+//    where the head starts (MIRROR_CUT), so the selection splits cleanly.
+
+const LENGTH = 4.751;
+const MIRROR_CUT = 0.8;
+
+const worldPoint = (m, v) => [m[0] * v[0] + m[4] * v[1] + m[8] * v[2] + m[12], m[1] * v[0] + m[5] * v[1] + m[9] * v[2] + m[13], m[2] * v[0] + m[6] * v[1] + m[10] * v[2] + m[14]];
+
+function worldPositions(node, prim) {
+  const m = node.getWorldMatrix();
+  const pos = prim.getAttribute('POSITION');
+  const out = new Float32Array(pos.getCount() * 3);
+  const v = [0, 0, 0];
+  for (let i = 0; i < pos.getCount(); i++) out.set(worldPoint(m, pos.getElement(i, v)), i * 3);
+  return out;
+}
+
+const indicesOf = (prim) => {
+  const src = prim.getIndices()?.getArray();
+  return src ? Uint32Array.from(src) : Uint32Array.from({ length: prim.getAttribute('POSITION').getCount() }, (_, i) => i);
+};
+
 function splitLampCovers(doc) {
   const root = doc.getRoot();
   const buffer = root.listBuffers()[0];
@@ -27,16 +55,7 @@ function splitLampCovers(doc) {
     if (!mesh) continue;
     for (const prim of mesh.listPrimitives()) {
       if (prim.getMaterial() !== glass || prim.getMode() !== 4) continue;
-      const m = node.getWorldMatrix();
-      const pos = prim.getAttribute('POSITION');
-      const positions = new Float32Array(pos.getCount() * 3);
-      const v = [0, 0, 0];
-      for (let i = 0; i < pos.getCount(); i++) {
-        pos.getElement(i, v);
-        positions.set([m[0] * v[0] + m[4] * v[1] + m[8] * v[2] + m[12], m[1] * v[0] + m[5] * v[1] + m[9] * v[2] + m[13], m[2] * v[0] + m[6] * v[1] + m[10] * v[2] + m[14]], i * 3);
-      }
-      const src = prim.getIndices()?.getArray();
-      const p = { positions, indices: src ? Uint32Array.from(src) : Uint32Array.from({ length: pos.getCount() }, (_, i) => i) };
+      const p = { positions: worldPositions(node, prim), indices: indicesOf(prim) };
       splitComponents(p);
       const keep = [];
       const cover = [];
@@ -52,12 +71,90 @@ function splitLampCovers(doc) {
     }
   }
 }
+
+/** Splits the triangles of a primitive that cross the plane `distance(worldPosition) = 0`. */
+function cutPrimitive(doc, node, prim, distance) {
+  const buffer = doc.getRoot().listBuffers()[0];
+  const world = worldPositions(node, prim);
+  const attributes = prim.listSemantics().map((semantic) => {
+    const accessor = prim.getAttribute(semantic);
+    return { semantic, accessor, size: accessor.getElementSize(), values: Array.from(accessor.getArray()) };
+  });
+  const d = [];
+  for (let i = 0; i < world.length / 3; i++) d.push(distance([world[i * 3], world[i * 3 + 1], world[i * 3 + 2]]));
+  const made = new Map();
+  const between = (a, b) => {
+    const key = a < b ? `${a},${b}` : `${b},${a}`;
+    let v = made.get(key);
+    if (v === undefined) {
+      const t = d[a] / (d[a] - d[b]);
+      v = d.length;
+      d.push(0);
+      for (const at of attributes) for (let k = 0; k < at.size; k++) at.values.push(at.values[a * at.size + k] + (at.values[b * at.size + k] - at.values[a * at.size + k]) * t);
+      made.set(key, v);
+    }
+    return v;
+  };
+  const src = indicesOf(prim);
+  const out = [];
+  const EPS = 1e-6;
+  for (let t = 0; t < src.length; t += 3) {
+    const tri = [src[t], src[t + 1], src[t + 2]];
+    if (tri.every((v) => d[v] >= -EPS) || tri.every((v) => d[v] <= EPS)) {
+      out.push(...tri);
+      continue;
+    }
+    const front = [];
+    const back = [];
+    for (let k = 0; k < 3; k++) {
+      const a = tri[k];
+      const b = tri[(k + 1) % 3];
+      (d[a] >= 0 ? front : back).push(a);
+      if (d[a] >= 0 !== d[b] >= 0) {
+        const v = between(a, b);
+        front.push(v);
+        back.push(v);
+      }
+    }
+    for (const poly of [front, back]) for (let k = 1; k + 1 < poly.length; k++) out.push(poly[0], poly[k], poly[k + 1]);
+  }
+  for (const at of attributes) {
+    prim.setAttribute(at.semantic, at.accessor.clone().setArray(new (at.accessor.getArray().constructor)(at.values)).setBuffer(buffer));
+  }
+  prim.setIndices(doc.createAccessor().setType('SCALAR').setArray(Uint32Array.from(out)).setBuffer(buffer));
+}
+
+function cutMirrorArms(doc) {
+  // Car z from source coordinates, the way lib.mjs works it out for front '+z': z = (-x - middle) * scale.
+  const min = [Infinity, Infinity, Infinity];
+  const max = [-Infinity, -Infinity, -Infinity];
+  const nodes = doc.getRoot().listNodes().filter((n) => n.getMesh());
+  for (const node of nodes) {
+    for (const prim of node.getMesh().listPrimitives()) {
+      const w = worldPositions(node, prim);
+      for (let i = 0; i < w.length; i++) {
+        if (w[i] < min[i % 3]) min[i % 3] = w[i];
+        if (w[i] > max[i % 3]) max[i % 3] = w[i];
+      }
+    }
+  }
+  const scale = LENGTH / (max[2] - min[2]);
+  const carZ = (w) => (-w[0] + (min[0] + max[0]) / 2) * scale;
+  for (const node of nodes) {
+    if (!/^Object_(63|71)$/.test(node.getName())) continue;
+    for (const prim of node.getMesh().listPrimitives()) cutPrimitive(doc, node, prim, (w) => Math.abs(carZ(w)) - MIRROR_CUT);
+  }
+}
+
 if (!NodeIO.prototype.__modelY2020) {
   const read = NodeIO.prototype.read;
   NodeIO.prototype.__modelY2020 = true;
   NodeIO.prototype.read = async function (uri, ...rest) {
     const doc = await read.call(this, uri, ...rest);
-    if (String(uri).includes(UID)) splitLampCovers(doc);
+    if (String(uri).includes(UID)) {
+      splitLampCovers(doc);
+      cutMirrorArms(doc);
+    }
     return doc;
   };
 }
@@ -74,7 +171,10 @@ export default {
     licenseUrl: 'https://creativecommons.org/licenses/by/4.0/',
   },
   front: '+z',
-  lengthM: 4.751,
+  lengthM: LENGTH,
+  // The headlights' outer covers: their tops face the sky, and as `lens` they catch the lot's lamps at
+  // grazing angles and bloom as if a headlight were on. The housings read fine without them.
+  drop: [{ mat: /Carro_Lente/, box: [[1.6, 0.7, -0.9], [2.3, 1.05, 0.9]] }],
   materials: [
     [/Carro_Pintura/, 'paint'],
     [/Carro_Lente/, 'lens'],
@@ -82,9 +182,9 @@ export default {
     [/Carro_Vidro_Vermelho2/, 'redlens'],
     [/Object_78 \| Carro_Plastico_Brilho_1/, 'glass'],
     // Lamp internals: satin rather than mirror-bright, so the lot's lamps don't glint off them.
-    [/Carro_Metal_Farol|Carro_Metal_Lanterna_Traseira/, { preset: 'reflector', color: [0.5, 0.5, 0.52], metal: 0.7, rough: 0.45 }],
+    [/Carro_Metal_Farol|Carro_Metal_Lanterna_Traseira/, { preset: 'reflector', color: [0.4, 0.4, 0.42], metal: 0.35, rough: 0.6 }],
     [/Carro_Metal_Vermelho_3/, { preset: 'redinner', name: 'redhousing', color: [0.12, 0.005, 0.005] }],
-    [/Carro_Metal_Vermelho/, 'redinner'],
+    [/Carro_Metal_Vermelho/, { preset: 'redinner', metal: 0.1, rough: 0.55 }],
     [/Carro_Espelhos/, 'mirror'],
     [/Carro_Cromado/, 'chrome'],
     [/Carro_Pneu/, 'rubber'],
@@ -128,22 +228,22 @@ export default {
           select: [
             { mat: /Object_(38|45) \| Carro_Pintura|Carro_Espelhos/, box: on(s, [[0.5, 1.0, 0.78], [0.8, 1.3, 1.05]]) },
             // The gloss shell is one piece with the arm on the door; the head starts where it thickens.
-            { mat: /Object_(63|71) \|/, box: on(s, [[0.5, 1.0, 0.795], [0.8, 1.3, 1.05]]), mode: 'tri' },
+            { mat: /Object_(63|71) \|/, box: on(s, [[0.5, 1.0, MIRROR_CUT], [0.8, 1.3, 1.05]]), mode: 'tri' },
           ],
-          rig: { type: 'hinge', pivot: [0.655, 1.15, s * 0.825], axis: [0, 1, 0], deg: -s * 58, invert: true },
+          rig: { type: 'hinge', pivot: [0.71, 1.15, s * MIRROR_CUT], axis: [0, 1, 0], deg: -s * 52, invert: true },
         },
       ]),
     ),
     ...Object.fromEntries(
       sides((side, s) => [
         `${side}FrontWindow`,
-        { select: [{ mat: /Carro_Vidros2/, box: on(s, [[-0.4, 1.05, 0.5], [0.75, 1.6, 0.8]]) }], rig: { type: 'slide', vector: [0, -0.44, s * 0.135] } },
+        { select: [{ mat: /Carro_Vidros2/, box: on(s, [[-0.4, 1.05, 0.5], [0.75, 1.6, 0.8]]) }], rig: { type: 'slide', vector: [0, -0.47, s * 0.07] } },
       ]),
     ),
     ...Object.fromEntries(
       sides((side, s) => [
         `${side}RearWindow`,
-        { select: [{ mat: /Carro_Vidros2/, box: on(s, [[-1.25, 1.1, 0.5], [-0.35, 1.6, 0.78]]) }], rig: { type: 'slide', vector: [0, -0.4, s * 0.12] } },
+        { select: [{ mat: /Carro_Vidros2/, box: on(s, [[-1.25, 1.1, 0.5], [-0.35, 1.6, 0.78]]) }], rig: { type: 'slide', vector: [0, -0.42, s * 0.07] } },
       ]),
     ),
   },
@@ -203,7 +303,7 @@ export default {
       gain: 1.5,
       select: sides((side, s) => [
         { mat: /Object_79 \|/, clip: on(s, [[-2.33, 1.0, 0.09], [-2.23, 1.012, 0.15]]) },
-        { mat: /Object_48 \|/, clip: on(s, [[-2.31, 0.975, 0.09], [-2.26, 1.002, 0.15]]) },
+        { mat: /Object_48 \|/, clip: on(s, [[-2.31, 0.982, 0.095], [-2.26, 1.002, 0.145]]) },
       ]).flat(),
     },
   ],

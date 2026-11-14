@@ -140,7 +140,8 @@ export default {
     [/ext_plastic|Body_Black/, 'black'],
     [/\| Lights$/, { preset: 'black', name: 'lamphousing', rough: 0.4 }],
     [/Lights_Glo/, { preset: 'reflector', name: 'lightguide', color: [0.6, 0.6, 0.62], metal: 0.2, rough: 0.35 }],
-    [/Lights_Ref/, 'reflector'],
+    // Duller than a real reflector: a mirror finish here throws street-lamp glints through the bloom.
+    [/Lights_Ref/, { preset: 'reflector', metal: 0.6, rough: 0.45 }],
     [TAIL, 'redinner'],
     [/\| Mirror$/, 'mirror'],
     [/EXT_PLATE/, { preset: 'plate', color: [0.8, 0.8, 0.8], keepTexture: true }],
@@ -213,7 +214,11 @@ export default {
       ids: [`${side}Tail`],
       color: 'red',
       select: [
-        { mat: TAIL, clip: on(s, [[-2.25, 0.82, 0.4], [-2.0, 0.96, 0.7]]) },
+        // The arms, without the underside of the upper one (it would show through the band below it).
+        { mat: TAIL, clip: on(s, [[-2.25, 0.925, 0.4], [-2.0, 0.96, 0.44]]) },
+        { mat: TAIL, clip: on(s, [[-2.25, 0.9385, 0.44], [-2.0, 0.96, 0.7]]) },
+        { mat: TAIL, clip: on(s, [[-2.25, 0.82, 0.4], [-2.0, 0.86, 0.7]]) },
+        // The spine's outer edge, top and bottom.
         { mat: TAIL, clip: on(s, [[-2.25, 0.82, 0.745], [-2.0, 0.96, 0.78]]) },
         { mat: TAIL, clip: on(s, [[-2.25, 0.925, 0.7], [-2.0, 0.96, 0.745]]) },
         { mat: TAIL, clip: on(s, [[-2.25, 0.82, 0.7], [-2.0, 0.85, 0.745]]) },
@@ -224,8 +229,9 @@ export default {
       color: 'red',
       select: [
         ...sides((side, s) => ({ mat: TAIL, clip: on(s, [[-2.25, 0.85, 0.7], [-2.0, 0.925, 0.745]]) })),
-        // The high-mounted strip behind the rear glass.
-        { mat: TAIL, box: [[-1.94, 1.13, -0.05], [-1.9, 1.16, 0.05]], mode: 'center' },
+        // The high-mounted strip sits under the foot of the rear glass, where the dark glass would
+        // hide its glow: light the band of glass right over it instead.
+        { mat: /EXT_Window/, clip: [[-1.933, 1.1, -0.2], [-1.913, 1.2, 0.2]] },
       ],
     },
     // The thin band inside the C, along its top and down its spine.

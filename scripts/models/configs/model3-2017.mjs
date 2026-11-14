@@ -26,6 +26,9 @@ function forwardOf(line, xMax, [zMin, zMax], step = 0.004) {
   return boxes;
 }
 
+/** A box in meters, in the source file's units (the build's scale is 0.31755). */
+const unscaled = (box) => box.map((corner) => corner.map((v) => v / 0.31755));
+
 // The charge port door is the front section of the left tail lamp. The model
 // has it in one piece with the lamp, so it is cut out: the lens along its
 // crease, the housing behind it along the edge of the C-shaped tail lamp.
@@ -54,6 +57,12 @@ export default {
   front: '+z',
   lengthM: 4.694,
   textureSize: 256,
+  // The inner frames of the four doors, hidden between the door skins and the door cards.
+  // (Drop rules run before the model is scaled, so these boxes are in source units.)
+  drop: [
+    ...sides((side, s) => ({ mat: /Object_2 \| Body$/, box: on(s, unscaled([[-0.1, 0.28, 0.78], [1.02, 0.91, 0.925]])) })),
+    ...sides((side, s) => ({ mat: /Object_2 \| Body$/, box: on(s, unscaled([[-1.205, 0.25, 0.715], [-0.14, 0.997, 0.93]])) })),
+  ],
   materials: [
     [/\| Body$/, 'paint'],
     [/Body_noir/, 'gloss'],
@@ -61,13 +70,13 @@ export default {
     [/Phare_vitre/, 'lens'],
     [/Feux_glass/, 'redlens'],
     // Headlights and bumper lamps.
-    [/\| Phare$/, { preset: 'reflector', name: 'headreflector', color: [0.42, 0.42, 0.44], metal: 0.85, rough: 0.3 }],
-    [/Phare_alu/, { preset: 'reflector', name: 'headtrim', color: [0.6, 0.6, 0.62], metal: 0.7, rough: 0.3 }],
-    [/Phare_blanc|Phare_feux_b/, { preset: 'reflector', name: 'lightguide', color: [0.62, 0.63, 0.65], metal: 0.1, rough: 0.35 }],
+    [/\| Phare$/, { preset: 'reflector', name: 'headreflector', color: [0.32, 0.32, 0.34], metal: 0.6, rough: 0.45 }],
+    [/Phare_alu/, { preset: 'reflector', name: 'headtrim', color: [0.45, 0.45, 0.47], metal: 0.5, rough: 0.45 }],
+    [/Phare_blanc|Phare_feux_b/, { preset: 'reflector', name: 'lightguide', color: [0.36, 0.37, 0.39], metal: 0, rough: 0.5 }],
     [/Phare_orange/, 'amberinner'],
     // Tail lamps.
-    [/Feux_blanc/, { preset: 'reflector', name: 'taillightguide', color: [0.55, 0.55, 0.56], metal: 0.1, rough: 0.35 }],
-    [/Feux_chrome/, { preset: 'reflector', name: 'tailreflector' }],
+    [/Feux_blanc/, { preset: 'reflector', name: 'taillightguide', color: [0.4, 0.4, 0.41], metal: 0, rough: 0.5 }],
+    [/Feux_chrome/, { preset: 'redinner', name: 'tailreflector', color: [0.3, 0.04, 0.04], metal: 0.4, rough: 0.5 }],
     [/Feux_noir/, { preset: 'black', name: 'lamphousing', rough: 0.5 }],
     [/Feux_rouge|Feux_stop/, 'redinner'],
     // Wheels and brakes.
@@ -169,15 +178,16 @@ export default {
   beams: { head: [2.0, 0.66, 0.64], fog: [2.07, 0.4, 0.79] },
   cabin: [0.55, 0.95, 0],
   simplify: [
-    [/body\/seat/, 0.2, 0.002],
-    [/body\/interior/, 0.25, 0.002],
-    [/body\/(doorcard|console|headliner)/, 0.4, 0.002],
-    [/body\/caliper/, 0.15, 0.003],
+    [/body\/seat/, 0.14, 0.002],
+    [/body\/interior/, 0.15, 0.002],
+    [/body\/(doorcard|console|headliner)/, 0.3, 0.002],
+    [/body\/caliper/, 0.1, 0.003],
     [/body\/(hub|underbody|disc)/, 0.3, 0.003],
-    [/body\/rim$/, 0.3, 0.001],
+    [/body\/rim$/, 0.2, 0.001],
     [/body\/rimdark/, 0.5, 0.001],
-    [/body\/rubber/, 0.6, 0.001],
-    [/\/chrome$/, 0.3, 0.0005],
-    [/body\/black$/, 0.4, 0.001],
+    [/body\/rubber/, 0.45, 0.001],
+    [/\/chrome$/, 0.26, 0.0005],
+    [/body\/black$/, 0.25, 0.001],
+    [/lamp\/(brakeLights|.*FrontTurn)/, 0.5, 0.0005],
   ],
 };
