@@ -586,6 +586,17 @@ button.export {
   pointer-events: none;
 }
 
+.pane-badge a {
+  color: inherit;
+  text-decoration: underline;
+  text-decoration-color: rgb(255 255 255 / 0.25);
+  pointer-events: auto;
+}
+
+.pane-badge a:hover {
+  color: var(--fg);
+}
+
 .pane-badge-title {
   color: var(--fg);
   font-size: 14px;
@@ -950,6 +961,22 @@ button.generate-again {
 @container (max-width: 1080px) {
   .tool-group-label {
     display: none;
+  }
+}
+
+/* Tighter still: slimmer tools and a shorter Auto-generate button. */
+@container (max-width: 960px) {
+  .composer-tools {
+    gap: 5px;
+  }
+
+  button.tool {
+    min-width: 26px;
+    padding: 0 5px;
+  }
+
+  button.generate-trigger {
+    padding: 0 9px;
   }
 }
 

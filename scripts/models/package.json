@@ -1,0 +1,18 @@
+{
+  "name": "lightshow-studio-models",
+  "private": true,
+  "type": "module",
+  "description": "Offline pipeline that turns downloaded car models into the rigged GLBs in public/models. Not needed to build or run the app.",
+  "scripts": {
+    "fetch": "node fetch.mjs",
+    "build": "node build.mjs"
+  },
+  "dependencies": {
+    "@gltf-transform/core": "^4.1.0",
+    "@gltf-transform/extensions": "^4.1.0",
+    "@gltf-transform/functions": "^4.1.0",
+    "draco3dgltf": "^1.5.7",
+    "meshoptimizer": "^0.22.0",
+    "sharp": "^0.33.5"
+  }
+}

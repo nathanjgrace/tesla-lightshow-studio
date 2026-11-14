@@ -10,7 +10,6 @@ import { parseXlightsLayout, type LayoutMesh, type XlightsLayout } from '../../c
 import { TESLA_REPO_BASE, TESLA_REPO_COMMIT } from '../../library/catalog';
 import { fetchBytes, type ProgressFn } from '../../library/load';
 import type { BodyStyle } from '../../core/vehicles';
-import { usesModelS } from './derive';
 
 export type TeslaMeshModel = 'modelS' | 'cybertruck';
 
@@ -89,13 +88,9 @@ const ROOT = 'tesla_xlights_show_folder/';
 const ZIP_URL = `${TESLA_REPO_BASE}xlights/tesla_xlights_show_folder.zip`;
 const CACHE = `tesla-xlights-${TESLA_REPO_COMMIT.slice(0, 8)}`;
 
-/**
- * Which of Tesla's models a vehicle is built from: its own, or the Model S
- * reshaped (see derive.ts).
- */
+/** Tesla's own model for a vehicle, where it publishes one. */
 export function teslaMeshFor(style: BodyStyle): TeslaMeshModel | undefined {
-  if (style.model === 'cybertruck') return 'cybertruck';
-  return usesModelS(style) ? 'modelS' : undefined;
+  return style.model === 'cybertruck' ? 'cybertruck' : style.model === 'modelS' ? 'modelS' : undefined;
 }
 
 let zip: Promise<Uint8Array> | undefined;

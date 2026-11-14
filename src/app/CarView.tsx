@@ -3,8 +3,8 @@ import { useEffect, useRef, useState } from 'react';
 import type { Simulation } from '../core/simulate';
 import type { VehicleProfile } from '../core/vehicles';
 import { CAMERA_PRESETS, CarScene } from './car/CarScene';
-import { warpFor } from './car/derive';
-import { loadTeslaAsset, teslaMeshFor, type TeslaAsset } from './car/teslaAssets';
+import { glbFileFor, loadGlbAsset, type GlbAsset } from './car/glbAssets';
+import { loadTeslaAsset, teslaMeshFor, type TeslaAsset, type TeslaMeshModel } from './car/teslaAssets';
 import type { CarLook } from './carLook';
 import type { Playback } from './playback';
 
@@ -29,7 +29,7 @@ const storedFlag = (key: string, fallback: boolean) => {
   return v === null ? fallback : v === '1';
 };
 
-type ModelState = { model: string; progress: number; asset?: TeslaAsset; failed?: boolean };
+type ModelState = { model: string; progress: number; asset?: TeslaAsset | GlbAsset; failed?: boolean };
 
 interface Props {
   sim: Simulation | undefined;
@@ -82,28 +82,32 @@ export function CarView({ sim, vehicle, playback, look, onScene }: Props) {
     // The scene lives as long as the view.
   }, []);
 
-  // Tesla's own 3D model where it publishes one (Model S, Cybertruck) or one
-  // we can derive from it (Model X); the code-built body shows while it
+  // A community model rigged for this car where we have one, else Tesla's own
+  // 3D model (Model S, Cybertruck). The code-built body shows while it
   // downloads, and if it can't be loaded.
-  const meshModel = teslaMeshFor(body);
+  const glbFile = glbFileFor(vehicle.id);
+  const meshModel = glbFile ? `glb:${glbFile}` : teslaMeshFor(body);
   const [hq, setHq] = useState<ModelState>();
   useEffect(() => {
     if (!meshModel) return;
     let live = true;
     const model = meshModel;
     setHq({ model, progress: 0 });
-    loadTeslaAsset(model, (progress) => live && setHq({ model, progress }))
+    const onProgress = (progress: number) => live && setHq({ model, progress });
+    const load: Promise<TeslaAsset | GlbAsset> = glbFile ? loadGlbAsset(glbFile, onProgress) : loadTeslaAsset(model as TeslaMeshModel, onProgress);
+    load
       .then((asset) => live && setHq({ model, progress: 1, asset }))
       .catch((e: unknown) => {
-        console.warn("Couldn't load Tesla's 3D model", e);
+        console.warn("Couldn't load the 3D model", e);
         if (live) setHq({ model, progress: 1, failed: true });
       });
     return () => {
       live = false;
     };
-  }, [meshModel]);
+  }, [meshModel, glbFile]);
   const asset = meshModel && hq?.model === meshModel ? hq.asset : undefined;
   const loading = !!meshModel && hq?.model === meshModel && !hq.asset && !hq.failed;
+  const credit = asset && 'kind' in asset ? asset.credit : undefined;
 
   useEffect(() => scene?.setBody(body, asset), [scene, body, asset]);
 
@@ -122,13 +126,24 @@ export function CarView({ sim, vehicle, playback, look, onScene }: Props) {
       <div className="pane-badge">
         <span className="pane-badge-title">{vehicle.name}</span>
         <span>
-          {asset
-            ? asset.model === body.model
-              ? "Tesla's 3D model"
-              : (warpFor(body)?.label ?? "Tesla's 3D model")
-            : loading
-              ? `Loading Tesla's 3D model… ${Math.round((hq?.progress ?? 0) * 100)}%`
-              : 'Stylized preview'}
+          {loading ? (
+            `Loading the 3D model… ${Math.round((hq?.progress ?? 0) * 100)}%`
+          ) : asset && credit ? (
+            <>
+              3D model by{' '}
+              <a href={credit.url} target="_blank" rel="noreferrer">
+                {credit.author}
+              </a>{' '}
+              ·{' '}
+              <a href={credit.licenseUrl} target="_blank" rel="noreferrer">
+                {credit.license}
+              </a>
+            </>
+          ) : asset ? (
+            "Tesla's 3D model"
+          ) : (
+            'Stylized preview'
+          )}
         </span>
       </div>
       <div className="camera-presets" role="group" aria-label="Camera views">

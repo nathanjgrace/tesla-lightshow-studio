@@ -12,10 +12,11 @@ import type { PaintFinish } from '../../core/paint';
 import type { Simulation } from '../../core/simulate';
 import type { BodyStyle } from '../../core/vehicles';
 import { buildBody } from './bodies';
-import { warpFor } from './derive';
 import { buildTeslaBody } from './meshBody';
 import type { TeslaAsset } from './teslaAssets';
 import { shadowTexture } from './kit';
+import type { GlbAsset } from './glbAssets';
+import { buildGlbBody } from './glbBody';
 import { buildLot, lotEnvironment, type Lot } from './lot';
 
 export interface Materials {
@@ -58,6 +59,12 @@ export interface Builder {
   /** `object`: what moves, so channel previews can frame it. */
   closure(id: string, apply: (position: number, dancing: boolean, timeS: number) => void, object?: THREE.Object3D): void;
   beam(ids: string[], light: THREE.Light, max: number): void;
+  /**
+   * Registers a model's own material (chrome, alloy, gloss trim) so that
+   * with reflections off it turns satin, like the paint: a sharp highlight
+   * on a wheel spoke blooms into a dot that reads as a lamp.
+   */
+  finish(material: THREE.MeshStandardMaterial): void;
 }
 
 export interface BuiltBody {
@@ -84,14 +91,15 @@ type ReflectionSpec = {
 const REFLECTIONS: Record<'on' | 'off', ReflectionSpec> = {
   off: {
     environment: 0.25,
-    glass: { metalness: 0, roughness: 0.5, clearcoat: 0 },
+    // Low highlights too: a lot lamp mirrored in the roof glass blooms into a false light.
+    glass: { metalness: 0, roughness: 0.5, clearcoat: 0, specularIntensity: 0.04 },
     trim: { metalness: 0.05, roughness: 0.7 },
   },
   on: {
     environment: 1,
     // Not mirror-smooth: a pin-sharp highlight of the moon or a street lamp
     // blooms into a dot that looks like a light.
-    glass: { metalness: 0.4, roughness: 0.22, clearcoat: 0.6, clearcoatRoughness: 0.25 },
+    glass: { metalness: 0.4, roughness: 0.22, clearcoat: 0.6, clearcoatRoughness: 0.25, specularIntensity: 1 },
     trim: { metalness: 0.5, roughness: 0.38 },
   },
 };
@@ -150,6 +158,7 @@ export class CarScene {
   private lights: LightPart[] = [];
   private bars: LightBar[] = [];
   private closures: { id: string; apply: (p: number, d: boolean, t: number) => void; object?: THREE.Object3D }[] = [];
+  private finishes: { material: THREE.MeshStandardMaterial; metalness: number; roughness: number; roughnessMap: THREE.Texture | null; metalnessMap: THREE.Texture | null }[] = [];
   private bodyListeners = new Set<() => void>();
   /** Changes whenever the car is rebuilt, so cached channel previews can be dropped. */
   bodyVersion = 0;
@@ -261,8 +270,8 @@ export class CarScene {
    * Builds the car for a vehicle, from Tesla's own model when one is given;
    * does nothing if that body is already shown.
    */
-  setBody(style: BodyStyle, asset?: TeslaAsset): void {
-    const key = JSON.stringify(style) + (asset ? `|${asset.model}` : '');
+  setBody(style: BodyStyle, asset?: TeslaAsset | GlbAsset): void {
+    const key = JSON.stringify(style) + (asset ? `|${'kind' in asset ? asset.file : asset.model}` : '');
     if (key === this.bodyKey) return;
     this.bodyKey = key;
     if (this.car) {
@@ -276,6 +285,7 @@ export class CarScene {
     }
     this.lights = [];
     this.bars = [];
+    this.finishes = [];
     this.closures = [];
     this.beams = [];
     const car = new THREE.Group();
@@ -304,9 +314,14 @@ export class CarScene {
       },
       closure: (id, apply, object) => this.closures.push({ id, apply, ...(object ? { object } : {}) }),
       beam: (ids, light, max) => this.beams.push({ ids, light, max }),
+      finish: (material) => {
+        if (this.finishes.some((f) => f.material === material)) return;
+        const { metalness, roughness, roughnessMap, metalnessMap } = material;
+        this.finishes.push({ material, metalness, roughness, roughnessMap, metalnessMap });
+      },
     };
-    const warp = asset?.model === 'modelS' ? warpFor(style) : undefined;
-    this.bounds = asset ? buildTeslaBody(builder, asset, style, warp) : buildBody(builder, style);
+    if (asset && 'kind' in asset) this.bounds = buildGlbBody(builder, asset);
+    else this.bounds = asset ? buildTeslaBody(builder, asset) : buildBody(builder, style);
     this.applyPaint();
     this.target.set(0, this.bounds.height * 0.46, 0);
     if (!this.userMovedCamera) {
@@ -442,7 +457,7 @@ export class CarScene {
     const f = REFLECTIONS[on ? 'on' : 'off'];
     this.scene.environmentIntensity = f.environment;
     this.m.glass.setValues(f.glass);
-    this.m.sideGlass.setValues({ metalness: f.glass.metalness ?? 0, roughness: f.glass.roughness ?? 0.5 });
+    this.m.sideGlass.setValues({ metalness: f.glass.metalness ?? 0, roughness: f.glass.roughness ?? 0.5, specularIntensity: f.glass.specularIntensity ?? 1 });
     this.m.trim.setValues(f.trim);
     this.applyPaint();
   }
@@ -466,6 +481,20 @@ export class CarScene {
       params.metalness = Math.min(params.metalness ?? 0, 0.3);
       params.roughness = Math.max(params.roughness ?? 0, 0.62);
       params.clearcoat = 0;
+    }
+    for (const f of this.finishes) {
+      const m = f.material;
+      // A gloss map would scale the roughness back down, so it goes too.
+      const roughnessMap = this.reflections ? f.roughnessMap : null;
+      const metalnessMap = this.reflections ? f.metalnessMap : null;
+      if (m.roughnessMap !== roughnessMap || m.metalnessMap !== metalnessMap) {
+        m.roughnessMap = roughnessMap;
+        m.metalnessMap = metalnessMap;
+        m.needsUpdate = true;
+      }
+      const mapped = this.reflections && f.roughnessMap;
+      m.metalness = this.reflections ? f.metalness : Math.min(f.metalness, 0.25);
+      m.roughness = mapped ? f.roughness : this.reflections ? Math.max(f.roughness, 0.16) : Math.max(f.roughness, 0.62);
     }
     for (const mat of [this.m.paint, this.m.meshPaint]) {
       mat.setValues(params);

@@ -5,3 +5,7 @@ fixtures/
 *.log
 .DS_Store
 .claude/worktrees/
+
+# Car model pipeline: downloads and its own dependencies
+scripts/models/.cache/
+scripts/models/node_modules/
