@@ -123,6 +123,8 @@ const MIRROR_SHADER = {
       // so the wet ground never glows when every lamp on the car is off.
       float lum = dot(reflection, vec3(0.2126, 0.7152, 0.0722));
       reflection *= mix(0.22, 1.0, smoothstep(0.7, 1.8, lum));
+      // And never brighter than a soft sheen: a headlight pool mirrored at full strength blinds the view.
+      reflection = min(reflection, vec3(0.55));
       vec3 v = normalize(cameraPosition - vWorld);
       float fresnel = 0.02 + 0.98 * pow(1.0 - max(v.y, 0.0), 5.0);
       float amount = (0.4 + 0.6 * fresnel) * mix(0.5, 1.0, puddle) * mix(1.0, 0.55, paint);
@@ -150,7 +152,7 @@ export function buildLot(scene: THREE.Scene): Lot {
   // Its own highlights are kept low too: broad glare from the fill lights
   // washed the whole lot out.
   const asphalt = own(
-    new THREE.MeshPhysicalMaterial({ color: '#16181c', roughness: 0.6, metalness: 0, envMapIntensity: 0, specularIntensity: 0.12 }),
+    new THREE.MeshPhysicalMaterial({ color: '#262a30', roughness: 0.6, metalness: 0, envMapIntensity: 0, specularIntensity: 0.12 }),
   );
   asphalt.onBeforeCompile = (shader) => {
     shader.vertexShader = shader.vertexShader
@@ -230,7 +232,7 @@ export function buildLot(scene: THREE.Scene): Lot {
       group.add(base, post, glow);
       // Only the nearest island's lamps cast light; farther ones just glow.
       if (k === 0 || k === -1) {
-        const light = new THREE.PointLight(LAMP_COLOR, 110, 30, 1.5);
+        const light = new THREE.PointLight(LAMP_COLOR, 150, 32, 1.4);
         light.position.copy(glow.position).add(new THREE.Vector3(0, -0.3, 0));
         group.add(light);
       }

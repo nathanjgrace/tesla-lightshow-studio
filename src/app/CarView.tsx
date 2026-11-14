@@ -6,6 +6,7 @@ import { CAMERA_PRESETS, CarScene } from './car/CarScene';
 import { glbFileFor, loadGlbAsset, type GlbAsset } from './car/glbAssets';
 import { loadTeslaAsset, teslaMeshFor, type TeslaAsset, type TeslaMeshModel } from './car/teslaAssets';
 import type { CarLook } from './carLook';
+import { LightMap } from './LightMap';
 import type { Playback } from './playback';
 
 function stored(key: string): string | null {
@@ -112,6 +113,7 @@ export function CarView({ sim, vehicle, playback, look, onScene }: Props) {
   useEffect(() => scene?.setBody(body, asset), [scene, body, asset]);
 
   useEffect(() => scene?.setPaint(hex, finish), [scene, hex, finish]);
+  useEffect(() => scene?.setTrim(look.trim), [scene, look.trim]);
 
   useEffect(() => {
     if (!scene) return;
@@ -146,6 +148,7 @@ export function CarView({ sim, vehicle, playback, look, onScene }: Props) {
           )}
         </span>
       </div>
+      <LightMap scene={scene} sim={sim} playback={playback} vehicle={vehicle} />
       <div className="camera-presets" role="group" aria-label="Camera views">
         <button
           className={`icon-toggle${spin ? ' on' : ''}`}

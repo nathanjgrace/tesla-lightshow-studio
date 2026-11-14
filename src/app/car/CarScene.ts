@@ -64,7 +64,7 @@ export interface Builder {
    * with reflections off it turns satin, like the paint: a sharp highlight
    * on a wheel spoke blooms into a dot that reads as a lamp.
    */
-  finish(material: THREE.MeshStandardMaterial): void;
+  finish(material: THREE.MeshStandardMaterial, kind?: 'chrome' | 'wheel'): void;
 }
 
 export interface BuiltBody {
@@ -113,6 +113,27 @@ const PAINT_FINISHES: Record<PaintFinish, Partial<THREE.MeshPhysicalMaterialPara
   stainless: { metalness: 0.8, roughness: 0.4, clearcoat: 0 },
 };
 
+export interface TrimChoice {
+  trim: 'chrome' | 'black';
+  wheels: 'stock' | 'silver' | 'gray' | 'black';
+}
+
+const WHEEL_COLORS = { silver: '#b9bcc2', gray: '#4a4d52', black: '#111214' } as const;
+/** Multipliers for wheels shaded by a texture. */
+const WHEEL_TINTS = { silver: '#ffffff', gray: '#6a6a6a', black: '#2c2c2c' } as const;
+const luminance = (c: THREE.Color) => 0.2126 * c.r + 0.7152 * c.g + 0.0722 * c.b;
+
+/** Where everything the show drives sits on the car, for the overhead map. Meters; x forward, z right. */
+export interface CarLayout {
+  halfLength: number;
+  halfWidth: number;
+  height: number;
+  lamps: { ids: string[]; color: string; min: [number, number, number]; max: [number, number, number] }[];
+  /** Light bars: one LED per entry of `pixels`, left to right. */
+  bars: { pixels: string[][]; color: string; min: [number, number, number]; max: [number, number, number] }[];
+  closures: { id: string; min: [number, number, number]; max: [number, number, number] }[];
+}
+
 export interface CameraPreset {
   name: string;
   /** Direction from the car's center toward the camera. */
@@ -158,7 +179,16 @@ export class CarScene {
   private lights: LightPart[] = [];
   private bars: LightBar[] = [];
   private closures: { id: string; apply: (p: number, d: boolean, t: number) => void; object?: THREE.Object3D }[] = [];
-  private finishes: { material: THREE.MeshStandardMaterial; metalness: number; roughness: number; roughnessMap: THREE.Texture | null; metalnessMap: THREE.Texture | null }[] = [];
+  private finishes: {
+    material: THREE.MeshStandardMaterial;
+    kind?: 'chrome' | 'wheel';
+    color: THREE.Color;
+    metalness: number;
+    roughness: number;
+    roughnessMap: THREE.Texture | null;
+    metalnessMap: THREE.Texture | null;
+  }[] = [];
+  private trim: TrimChoice = { trim: 'chrome', wheels: 'stock' };
   private bodyListeners = new Set<() => void>();
   /** Changes whenever the car is rebuilt, so cached channel previews can be dropped. */
   bodyVersion = 0;
@@ -198,11 +228,11 @@ export class CarScene {
     this.renderer = new THREE.WebGLRenderer({ antialias: true });
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
-    this.renderer.toneMappingExposure = 1.2;
+    this.renderer.toneMappingExposure = 1.15;
     container.appendChild(this.renderer.domElement);
 
-    this.scene.background = new THREE.Color('#07090c');
-    this.scene.fog = new THREE.Fog('#07090c', 20, 50);
+    this.scene.background = new THREE.Color('#0c1016');
+    this.scene.fog = new THREE.Fog('#0c1016', 22, 55);
     const pmrem = new THREE.PMREMGenerator(this.renderer);
     this.scene.environment = pmrem.fromScene(lotEnvironment(), 0.02).texture;
     pmrem.dispose();
@@ -227,7 +257,7 @@ export class CarScene {
     // Night: a soft sky fill and a high moon, enough to read the car's shape
     // without competing with its lights. No low rim light: from the default
     // views its highlight on glossy glass looked like a lamp.
-    this.scene.add(new THREE.HemisphereLight('#9aa6bd', '#262626', 1.9));
+    this.scene.add(new THREE.HemisphereLight('#a3aec4', '#33353a', 2.1));
     const moon = new THREE.DirectionalLight('#c9d4ff', 1.6);
     moon.position.set(-4, 8, 5);
     this.scene.add(moon);
@@ -243,9 +273,10 @@ export class CarScene {
 
     this.composer = new EffectComposer(this.renderer);
     this.composer.addPass(new RenderPass(this.scene, this.camera));
+    // Only light sources glow: the threshold sits above the brightest lit white paint.
     // A tight, gentle glow: enough to read as light, small enough that the
     // separate pixels of a dense light bar stay distinct.
-    this.bloom = new UnrealBloomPass(new THREE.Vector2(256, 256), 0.42, 0.12, 0.95);
+    this.bloom = new UnrealBloomPass(new THREE.Vector2(256, 256), 0.42, 0.12, 1.7);
     this.composer.addPass(this.bloom);
     this.composer.addPass(new OutputPass());
 
@@ -314,10 +345,10 @@ export class CarScene {
       },
       closure: (id, apply, object) => this.closures.push({ id, apply, ...(object ? { object } : {}) }),
       beam: (ids, light, max) => this.beams.push({ ids, light, max }),
-      finish: (material) => {
+      finish: (material, kind) => {
         if (this.finishes.some((f) => f.material === material)) return;
         const { metalness, roughness, roughnessMap, metalnessMap } = material;
-        this.finishes.push({ material, metalness, roughness, roughnessMap, metalnessMap });
+        this.finishes.push({ material, ...(kind ? { kind } : {}), color: material.color.clone(), metalness, roughness, roughnessMap, metalnessMap });
       },
     };
     if (asset && 'kind' in asset) this.bounds = buildGlbBody(builder, asset);
@@ -328,9 +359,35 @@ export class CarScene {
       this.controls.target.copy(this.target);
       this.camera.position.copy(this.presetPosition(CAMERA_PRESETS[0]!));
     }
+    this.carLayout = this.measureLayout();
     this.applyFrame();
     this.bodyVersion++;
     for (const cb of this.bodyListeners) cb();
+  }
+
+  private carLayout: CarLayout | undefined;
+
+  /** The current car's lamps and moving parts, measured in their rest pose. */
+  layout(): CarLayout | undefined {
+    return this.carLayout;
+  }
+
+  private measureLayout(): CarLayout | undefined {
+    if (!this.car) return undefined;
+    this.car.updateMatrixWorld(true);
+    const box = new THREE.Box3();
+    const span = (o: THREE.Object3D) => {
+      box.setFromObject(o);
+      return { min: box.min.toArray() as [number, number, number], max: box.max.toArray() as [number, number, number] };
+    };
+    return {
+      halfLength: this.bounds.halfLength,
+      halfWidth: this.bounds.halfWidth,
+      height: this.bounds.height,
+      lamps: this.lights.map((l) => ({ ids: l.ids, color: `#${l.color.getHexString()}`, ...span(l.mesh) })),
+      bars: this.bars.map((b) => ({ pixels: b.pixels, color: `#${((b.mesh as THREE.Mesh).material as THREE.MeshStandardMaterial).emissive.getHexString()}`, ...span(b.mesh) })),
+      closures: this.closures.flatMap((c) => (c.object ? [{ id: c.id, ...span(c.object) }] : [])),
+    };
   }
 
   /** Called whenever the car is rebuilt (a new vehicle, or Tesla's model arriving). */
@@ -462,6 +519,17 @@ export class CarScene {
     this.applyPaint();
   }
 
+  /** Chrome or black trim, and the wheel color, on models whose parts can be told apart. */
+  setTrim(choice: TrimChoice): void {
+    this.trim = choice;
+    this.applyPaint();
+  }
+
+  /** Whether this car's model has separate trim or wheel materials to recolor. */
+  trimOptions(): { trim: boolean; wheels: boolean } {
+    return { trim: this.finishes.some((f) => f.kind === 'chrome'), wheels: this.finishes.some((f) => f.kind === 'wheel') };
+  }
+
   /** Paints the car; without a choice, each model shows its default color. */
   setPaint(hex: string, finish: PaintFinish): void {
     this.paint = { hex, finish };
@@ -493,8 +561,21 @@ export class CarScene {
         m.needsUpdate = true;
       }
       const mapped = this.reflections && f.roughnessMap;
-      m.metalness = this.reflections ? f.metalness : Math.min(f.metalness, 0.25);
-      m.roughness = mapped ? f.roughness : this.reflections ? Math.max(f.roughness, 0.16) : Math.max(f.roughness, 0.62);
+      // Trim and wheel choices: black trim instead of chrome; wheels tinted from their own color.
+      let { metalness, roughness } = f;
+      m.color.copy(f.color);
+      if (f.kind === 'chrome' && this.trim.trim === 'black') {
+        m.color.set('#0b0b0c');
+        metalness = 0.3;
+        roughness = 0.4;
+      } else if (f.kind === 'wheel' && this.trim.wheels !== 'stock') {
+        const textured = !!m.map;
+        // A textured wheel is tinted (the texture carries the shading); a plain one is recolored.
+        if (textured) m.color.set(WHEEL_TINTS[this.trim.wheels]);
+        else m.color.set(WHEEL_COLORS[this.trim.wheels]).multiplyScalar(0.35 + 0.65 * Math.min(1, luminance(f.color) / 0.3 + 0.35));
+      }
+      m.metalness = this.reflections ? metalness : Math.min(metalness, 0.25);
+      m.roughness = mapped ? roughness : this.reflections ? Math.max(roughness, 0.16) : Math.max(roughness, 0.62);
     }
     for (const mat of [this.m.paint, this.m.meshPaint]) {
       mat.setValues(params);
@@ -576,7 +657,7 @@ export class CarScene {
           }
         }
       }
-      distance *= extent / 0.82;
+      distance *= extent / 0.94;
     }
     return dir.multiplyScalar(Math.min(distance, this.controls.maxDistance)).add(this.target);
   }

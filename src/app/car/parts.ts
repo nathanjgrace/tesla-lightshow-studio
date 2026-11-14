@@ -73,13 +73,14 @@ export function headBeams(b: Builder, at: { x: number; y: number; z: number }, f
     beam.position.set(at.x, at.y, s * at.z);
     beam.target.position.set(at.x + 12, 0, s * (at.z + 0.9));
     b.car.add(beam, beam.target);
-    b.beam([`${side}OuterMainBeam`, `${side}InnerMainBeam`], beam, 160);
+    // Modest: a full-strength beam floods the wet ground and washes out the whole view.
+    b.beam([`${side}OuterMainBeam`, `${side}InnerMainBeam`], beam, 22);
     if (fog) {
       const f = new THREE.SpotLight('#fff3dc', 0, 12, 0.85, 0.8, 1.6);
       f.position.set(fog.x, fog.y, s * fog.z);
       f.target.position.set(fog.x + 5, 0, s * (fog.z + 1.6));
       b.car.add(f, f.target);
-      b.beam([`${side}FrontFog`], f, 40);
+      b.beam([`${side}FrontFog`], f, 8);
     }
   }
 }
@@ -136,12 +137,12 @@ export function rearLowLights(b: Builder, spec: { x: number; plateY: number; fog
   const glow = new THREE.PointLight('#ff2020', 0, 6, 1.6);
   glow.position.set(spec.x - 0.35, 0.7, 0);
   b.car.add(glow);
-  b.beam(['brakeLights', 'leftTail', 'rightTail'], glow, 5);
+  b.beam(['brakeLights', 'leftTail', 'rightTail'], glow, 2);
   const reverse = new THREE.SpotLight('#ffffff', 0, 10, 0.9, 0.8, 1.5);
   reverse.position.set(spec.x - 0.1, 0.9, 0);
   reverse.target.position.set(spec.x - 4.5, 0, 0);
   b.car.add(reverse, reverse.target);
-  b.beam(['reverseLights'], reverse, 30);
+  b.beam(['reverseLights'], reverse, 7);
 }
 
 /**

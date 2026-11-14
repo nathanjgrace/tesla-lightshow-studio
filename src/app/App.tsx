@@ -143,6 +143,14 @@ export function App() {
   const look = useCarLook(vehicle);
   const [carScene, setCarScene] = useState<CarScene>();
   const previews = useMemo(() => carScene && new ChannelPreviews(carScene), [carScene]);
+  // Which trim options the current car's model supports; refreshed when the model changes.
+  const [trimOptions, setTrimOptions] = useState<{ trim: boolean; wheels: boolean }>();
+  useEffect(() => {
+    if (!carScene) return;
+    const update = () => setTrimOptions(carScene.trimOptions());
+    update();
+    return carScene.onBodyChange(update);
+  }, [carScene]);
   useEffect(() => () => previews?.dispose(), [previews]);
   const [looping, setLooping] = useState(false);
   const muted = useSyncExternalStore((cb) => playback.subscribeState(cb), () => playback.isMuted);
@@ -653,6 +661,9 @@ export function App() {
               onChange={look.choosePaint}
               reflections={look.reflections}
               onReflections={look.setReflections}
+              trim={look.trim}
+              onTrim={look.setTrim}
+              {...(trimOptions ? { trimOptions } : {})}
             />
             <Menu
               className="car-menu"

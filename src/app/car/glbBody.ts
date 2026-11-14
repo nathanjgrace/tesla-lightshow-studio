@@ -67,7 +67,9 @@ export function buildGlbBody(b: Builder, asset: GlbAsset): BuiltBody {
         polygonOffsetUnits: -2,
       });
     }
-    if (material === source && source instanceof THREE.MeshStandardMaterial) b.finish(source);
+    if (material === source && source instanceof THREE.MeshStandardMaterial) {
+      b.finish(source, /chrome/i.test(source.name) ? 'chrome' : /alloy|^rim|^hub/i.test(source.name) ? 'wheel' : undefined);
+    }
     const mesh = new THREE.Mesh(o.geometry, material);
     mesh.name = o.name;
     mesh.applyMatrix4(o.matrixWorld);
@@ -97,12 +99,12 @@ export function buildGlbBody(b: Builder, asset: GlbAsset): BuiltBody {
   const glow = new THREE.PointLight('#ff2020', 0, 6, 1.6);
   glow.position.set(bounds.min.x - 0.35, 0.7, 0);
   b.car.add(glow);
-  b.beam(['brakeLights', 'leftTail', 'rightTail'], glow, 5);
+  b.beam(['brakeLights', 'leftTail', 'rightTail'], glow, 2);
   const reverse = new THREE.SpotLight('#ffffff', 0, 10, 0.9, 0.8, 1.5);
   reverse.position.set(bounds.min.x - 0.1, 0.9, 0);
   reverse.target.position.set(bounds.min.x - 4.5, 0, 0);
   b.car.add(reverse, reverse.target);
-  b.beam(['reverseLights'], reverse, 30);
+  b.beam(['reverseLights'], reverse, 7);
   const cabin = asset.cabin ?? [0.4, 0.95, 0];
   b.cabinLight.position.set(...cabin);
   b.car.add(b.cabinLight);

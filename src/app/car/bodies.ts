@@ -649,7 +649,7 @@ function buildCybertruck(b: Builder): BuiltBody {
   const glow = new THREE.PointLight('#ff2020', 0, 6, 1.6);
   glow.position.set(-3.2, 0.9, 0);
   b.car.add(glow);
-  b.beam(['brakeLights', 'rearLightBar26', 'rearLightBar27'], glow, 5);
+  b.beam(['brakeLights', 'rearLightBar26', 'rearLightBar27'], glow, 2);
   chargePort(b, kit, -2.3, 1.0);
 
   return { halfLength: 2.95, height: 1.85, halfWidth: halfWidth + 0.15, paint: '#a5a9ae' };

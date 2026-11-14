@@ -7,7 +7,6 @@ Web app for creating Tesla light shows (`.fseq` + audio on a USB drive). Plan: `
 - Handle tooling (git, npm, GitHub settings, deploys) directly where possible rather than handing off steps.
 - When a manual step is needed, give complete click-by-click instructions, including where to find each setting.
 - Summaries should say what changed in plain language, not just list files.
-- End each session's final summary with the live site URL: https://nathanjgrace.github.io/tesla-lightshow-studio/
 
 ## Code
 

@@ -13,6 +13,7 @@ import {
   type PaintChoice,
   type PaintFinish,
 } from '../core/paint';
+import type { TrimChoice } from './car/CarScene';
 import type { VehicleProfile } from '../core/vehicles';
 
 /** A swatch that hints at the finish: gloss gets a highlight, metallic a sheen. */
@@ -38,9 +39,20 @@ interface Props {
   onReflections: (on: boolean) => void;
   /** Just the swatch, for the toolbar. */
   compact?: boolean;
+  trim: TrimChoice;
+  onTrim: (choice: TrimChoice) => void;
+  /** Which of the trim options this car's 3D model can show. */
+  trimOptions?: { trim: boolean; wheels: boolean };
 }
 
-export function PaintPicker({ vehicle, choice, onChange, reflections, onReflections, compact }: Props) {
+const WHEELS: [TrimChoice['wheels'], string][] = [
+  ['stock', 'Stock'],
+  ['silver', 'Silver'],
+  ['gray', 'Gray'],
+  ['black', 'Black'],
+];
+
+export function PaintPicker({ vehicle, choice, onChange, reflections, onReflections, compact, trim, onTrim, trimOptions }: Props) {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
   const offers = factoryPaints(vehicle.id);
@@ -94,9 +106,9 @@ export function PaintPicker({ vehicle, choice, onChange, reflections, onReflecti
         )}
       </button>
       {open && (
-        <div className="paint-panel" role="dialog" aria-label="Paint">
+        <div className="paint-panel" role="dialog" aria-label="Paint, trim and wheels">
           <div className="paint-head">
-            <span>Paint</span>
+            <span>Paint, trim and wheels</span>
             <span className="paint-head-hint">{vehicle.name}</span>
           </div>
           <div className="paint-swatches" role="radiogroup" aria-label="Factory colors">
@@ -158,6 +170,32 @@ export function PaintPicker({ vehicle, choice, onChange, reflections, onReflecti
                 ))}
               </div>
             </div>
+          )}
+
+          <div className="paint-row">
+            <span className="paint-row-label">Trim</span>
+            <div className="segmented" role="radiogroup" aria-label="Trim">
+              {(['chrome', 'black'] as const).map((t) => (
+                <button key={t} role="radio" aria-checked={trim.trim === t} disabled={trimOptions && !trimOptions.trim} className={trim.trim === t ? 'on' : ''} onClick={() => onTrim({ ...trim, trim: t })}>
+                  {t === 'chrome' ? 'Chrome' : 'Black'}
+                </button>
+              ))}
+            </div>
+          </div>
+          <div className="paint-row">
+            <span className="paint-row-label">Wheels</span>
+            <div className="segmented" role="radiogroup" aria-label="Wheel color">
+              {WHEELS.map(([w, label]) => (
+                <button key={w} role="radio" aria-checked={trim.wheels === w} disabled={trimOptions && !trimOptions.wheels} className={trim.wheels === w ? 'on' : ''} onClick={() => onTrim({ ...trim, wheels: w })}>
+                  {label}
+                </button>
+              ))}
+            </div>
+          </div>
+          {trimOptions && (!trimOptions.trim || !trimOptions.wheels) && (
+            <p className="paint-foot">
+              {!trimOptions.trim && !trimOptions.wheels ? "This car's 3D model has its trim and wheels in one piece, so they can't be recolored." : !trimOptions.trim ? "This car's 3D model has no separate chrome trim." : "This car's 3D model has no separate wheel finish."}
+            </p>
           )}
 
           <label className="paint-toggle">

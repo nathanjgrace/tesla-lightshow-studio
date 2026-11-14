@@ -4,6 +4,7 @@
 import { useState } from 'react';
 import { parsePaintChoice, resolvePaint, type PaintChoice, type PaintFinish } from '../core/paint';
 import type { VehicleProfile } from '../core/vehicles';
+import type { TrimChoice } from './car/CarScene';
 
 function stored(key: string): string | null {
   try {
@@ -31,6 +32,8 @@ export interface CarLook {
   finish: PaintFinish;
   reflections: boolean;
   setReflections: (on: boolean) => void;
+  trim: TrimChoice;
+  setTrim: (choice: TrimChoice) => void;
 }
 
 export function useCarLook(vehicle: VehicleProfile): CarLook {
@@ -38,6 +41,14 @@ export function useCarLook(vehicle: VehicleProfile): CarLook {
   const [reflections, setReflectionsState] = useState(() => {
     const v = stored('reflections');
     return v === null ? stored('finish') === 'glossy' : v === '1';
+  });
+  const [trim, setTrimState] = useState<TrimChoice>(() => {
+    try {
+      const v = JSON.parse(stored('trim') ?? '{}') as Partial<TrimChoice>;
+      return { trim: v.trim === 'black' ? 'black' : 'chrome', wheels: v.wheels && ['silver', 'gray', 'black'].includes(v.wheels) ? v.wheels : 'stock' };
+    } catch {
+      return { trim: 'chrome', wheels: 'stock' };
+    }
   });
   const [paints, setPaints] = useState<Record<string, PaintChoice | undefined>>({});
   const paint = vehicle.id in paints ? paints[vehicle.id] : parsePaintChoice(stored(paintKey(vehicle)));
@@ -49,6 +60,11 @@ export function useCarLook(vehicle: VehicleProfile): CarLook {
     choosePaint: (choice) => {
       setPaints((p) => ({ ...p, [vehicle.id]: choice }));
       store(paintKey(vehicle), JSON.stringify(choice));
+    },
+    trim,
+    setTrim: (choice) => {
+      setTrimState(choice);
+      store('trim', JSON.stringify(choice));
     },
     reflections,
     setReflections: (on) => {
