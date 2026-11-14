@@ -783,6 +783,7 @@ export function App() {
               />
               <Composer
                 previews={previews}
+                onMirror={mirrorSelection}
                 docKey={doc.key}
                 show={show}
                 sim={sim}

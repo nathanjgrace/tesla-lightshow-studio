@@ -63,6 +63,7 @@ function groups(hasBeats: boolean): { title: string; rows: Row[] }[] {
       rows: [
         ['Drag an empty row', 'Draw an effect'],
         ['Double-click a row', 'A one-second effect'],
+        ['Right-click', 'Change type, duplicate, mirror, delete, or add here'],
         ['Drag an effect', 'Move it, also up or down to another channel'],
         [k(MOD_KEY, 'Drag'), 'Duplicate instead of move'],
         [k('Shift', 'Drag'), 'Box-select on empty space'],

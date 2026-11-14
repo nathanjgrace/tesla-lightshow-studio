@@ -12,7 +12,7 @@ import type { Analysis, SectionKind } from '../core/analysis';
 import { CHANNELS_BY_ID } from '../core/channels';
 import { decodeClosure, type ClosureCommand } from '../core/encoding';
 import type { FseqFile } from '../core/fseq';
-import { effectFamily, effectLabel, newEffectId, placeEffects, type Effect } from '../core/project';
+import { CLOSURE_KINDS, EFFECT_LABELS, effectFamily, effectLabel, LIGHT_KINDS, newEffectId, placeEffects, type Effect, type EffectKind } from '../core/project';
 import type { Simulation } from '../core/simulate';
 import { formatTime } from '../core/validate';
 import type { ChannelGroup, VehicleProfile } from '../core/vehicles';
@@ -165,6 +165,8 @@ interface Props {
   analysis?: Analysis;
   /** Pictures of what each channel drives, from the 3D preview. */
   previews?: ChannelPreviews;
+  /** Mirrors the selection to the other side of the car. */
+  onMirror?: () => void;
 }
 
 const SECTION_COLORS: Record<SectionKind, string> = {
@@ -185,6 +187,8 @@ export function Composer(props: Props) {
   data.current = props;
   const redraw = useRef<{ full: () => void; frame: () => void; fit: () => void; watchPreviews?: () => void }>(undefined);
   const [hover, setHover] = useState<{ row: Row; top: number; bottom: number }>();
+  /** Right-click menu: on an effect (acts on the selection) or on an empty spot of a row. */
+  const [menu, setMenu] = useState<{ x: number; y: number; channel: string; timeMs: number; onEffect: boolean }>();
 
   useEffect(() => {
     const el = host.current!;
@@ -1002,6 +1006,18 @@ export function Composer(props: Props) {
     cv.addEventListener('pointermove', onMove);
     cv.addEventListener('pointerup', onUp);
     cv.addEventListener('dblclick', onDouble);
+    function onContext(e: MouseEvent) {
+      const { x, y } = pointer(e);
+      const h = hit(x, y);
+      if (h.zone !== 'effect' && h.zone !== 'empty') return;
+      e.preventDefault();
+      const editor = d().editor;
+      if (h.zone === 'effect' && !editor.selection.has(h.effect.id)) editor.select([h.effect.id]);
+      const channel = h.zone === 'effect' ? h.effect.channel : h.channel;
+      setHover(undefined);
+      setMenu({ x: Math.min(x, width - 220), y: Math.min(y, height - 300), channel, timeMs: snapMs(msOf(x), e.altKey), onEffect: h.zone === 'effect' });
+    }
+    cv.addEventListener('contextmenu', onContext);
     const onLeave = () => setHover(undefined);
     cv.addEventListener('pointerleave', onLeave);
     window.addEventListener('keydown', onKey, true);
@@ -1026,6 +1042,7 @@ export function Composer(props: Props) {
       offPreviews.current();
       cancelAnimationFrame(pendingRedraw);
       cv.removeEventListener('pointerleave', onLeave);
+      cv.removeEventListener('contextmenu', onContext);
       window.removeEventListener('keydown', onKey, true);
       observer.disconnect();
       unsubscribe();
@@ -1050,10 +1067,80 @@ export function Composer(props: Props) {
   const [, setPictures] = useState(0);
   useEffect(() => props.previews?.subscribe(() => setPictures((n) => n + 1)), [props.previews]);
 
+  useEffect(() => {
+    if (!menu) return;
+    const close = () => setMenu(undefined);
+    const onKey = (e: KeyboardEvent) => e.key === 'Escape' && close();
+    window.addEventListener('pointerdown', close);
+    window.addEventListener('keydown', onKey);
+    window.addEventListener('blur', close);
+    return () => {
+      window.removeEventListener('pointerdown', close);
+      window.removeEventListener('keydown', onKey);
+      window.removeEventListener('blur', close);
+    };
+  }, [menu]);
+  const menuKinds: readonly EffectKind[] = menu ? (effectFamily(menu.channel) === 'closure' ? CLOSURE_KINDS : LIGHT_KINDS) : [];
+  const selected = () => editor.project?.effects.filter((fx) => editor.selection.has(fx.id)) ?? [];
+  const act = (fn: () => void) => () => {
+    fn();
+    setMenu(undefined);
+  };
+
   const picture = hover && props.previews?.get(rowIds(hover.row));
   return (
     <div ref={host} className="composer-canvas">
       <canvas ref={canvas} />
+      {menu && (
+        <div className="context-menu" style={{ left: menu.x, top: menu.y }} role="menu" onPointerDown={(e) => e.stopPropagation()}>
+          <div className="context-menu-title">{menu.onEffect ? (editor.selection.size > 1 ? `${editor.selection.size} effects` : 'Effect') : `Add at ${formatTime(menu.timeMs)}`}</div>
+          <div className="context-menu-kinds">
+            {menuKinds.map((kind) => (
+              <button
+                key={kind}
+                role="menuitem"
+                onClick={act(() => {
+                  if (menu.onEffect) {
+                    // Change the selected effects of this family to the chosen type.
+                    const family = effectFamily(menu.channel);
+                    editor.place(selected().filter((fx) => effectFamily(fx.channel) === family).map((fx) => ({ ...fx, kind })));
+                  } else {
+                    const info = CHANNELS_BY_ID.get(menu.channel)?.closure;
+                    const length = kind === 'move' && info ? Math.max(info.openSeconds, info.closeSeconds) * 1000 : 1000;
+                    const endMs = Math.min(show.frameCount * show.stepTimeMs, menu.timeMs + length);
+                    editor.place([{ id: newEffectId(), channel: menu.channel, startMs: menu.timeMs, endMs, kind }]);
+                  }
+                })}
+              >
+                {EFFECT_LABELS[kind]}
+              </button>
+            ))}
+          </div>
+          {menu.onEffect && (
+            <>
+              <hr />
+              <button
+                role="menuitem"
+                onClick={act(() => {
+                  const sel = selected();
+                  const span = Math.max(...sel.map((fx) => fx.endMs)) - Math.min(...sel.map((fx) => fx.startMs));
+                  editor.place(sel.map((fx) => ({ ...fx, id: newEffectId(), startMs: fx.startMs + span, endMs: fx.endMs + span })));
+                })}
+              >
+                Duplicate after <kbd>Ctrl/⌘ D</kbd>
+              </button>
+              {props.onMirror && (
+                <button role="menuitem" onClick={act(props.onMirror)}>
+                  Mirror to the other side <kbd>M</kbd>
+                </button>
+              )}
+              <button role="menuitem" className="danger" onClick={act(() => editor.remove(editor.selection))}>
+                Delete <kbd>Del</kbd>
+              </button>
+            </>
+          )}
+        </div>
+      )}
       {hover && hover.row.type !== 'group' && (
         <div className="channel-card" style={{ left: LABEL_W + 8, top: Math.max(HEADER_H, hover.top - 40) }} role="tooltip">
           {picture ? (

@@ -2598,3 +2598,59 @@ button.primary kbd {
     display: none;
   }
 }
+
+/* Right-click menu on the timeline */
+.context-menu {
+  position: absolute;
+  z-index: 30;
+  width: 216px;
+  padding: 6px;
+  background: rgb(22 25 30 / 0.97);
+  backdrop-filter: blur(14px);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow);
+}
+
+.context-menu-title {
+  padding: 4px 8px 6px;
+  color: var(--muted);
+  font-size: 10.5px;
+  font-weight: 650;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.context-menu-kinds {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 2px;
+}
+
+.context-menu button {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  width: 100%;
+  height: 28px;
+  padding: 0 8px;
+  border: none;
+  background: transparent;
+  border-radius: 6px;
+  font-size: 12.5px;
+}
+
+.context-menu button:hover {
+  border: none;
+  background: var(--surface-3);
+}
+
+.context-menu button.danger:hover {
+  color: var(--bad);
+}
+
+.context-menu hr {
+  margin: 5px 2px;
+  border: none;
+  border-top: 1px solid var(--border);
+}

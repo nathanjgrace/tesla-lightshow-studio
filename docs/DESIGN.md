@@ -137,6 +137,7 @@ audio ──▶ analysis (Worker) ──▶ choreograph(style, profile) ──�
 - Playback: loop the export range (L), full/half/quarter speed for checking timing, and mute, next to the time.
 - Checks are per car: a show file plays on any Tesla, so problems that can't happen on the chosen car (falcon-door limits on a Model 3, Model X pinch warnings on a Model S) are counted apart under "on other Teslas".
 - Narrow windows (under 760 px) always stack the car above the timeline and wrap the top bar; the app is still desktop-first.
+- Right-click on the timeline: on an effect, change its type, duplicate, mirror or delete the selection; on an empty spot, add an effect of any type there.
 - Scrubbing: ←/→ step by beat (Shift: by bar) once the song is analyzed, ¼ s (1 s) before; `,`/`.` step one frame; Home/End jump to the ends. A keyboard button in the transport lists every shortcut on hover (pinned with a click or `?`).
 - Layers, value curves, copy/paste, mirror L↔R, "fill with pattern".
 - A Problems panel that is always visible: validator issues with times, click to jump.
